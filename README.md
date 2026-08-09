@@ -43,8 +43,8 @@ Importing a group is what registers it; nothing is registered implicitly.
 
 Ready-to-drop-in consumer files for broker, drive, alma, code and academy are in
 `examples/`. The rollout order and the `just` → `make` translation table are in
-`docs/migration.md`; `docs/why.md` is the evidence for why this move happened at
-all.
+`docs/migration.md`. The evidence for why this move happened at all is public,
+in the runner's own repository: https://github.com/optersoft/make/blob/main/docs/why.md
 
 ## Things that deliberately did not change
 
