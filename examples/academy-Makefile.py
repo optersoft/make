@@ -16,15 +16,15 @@ Here it is a filtered dictionary, which cannot accidentally evaluate anything.
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#   "mkrun @ git+ssh://git@github.com/optersoft/make.git",
-#   "make-recipes-optersoft @ git+ssh://git@github.com/optersoft/make.git#subdirectory=recipes/optersoft",
+#   "mkrun @ git+https://github.com/optersoft/make.git",
+#   "make-recipes-optersoft @ git+ssh://git@github.com/optersoft/make-recipes.git",
 # ]
 # ///
 #
-# Git references until both packages are on PyPI; `make --sync` pins the exact
-# commit in Makefile.py.lock, so this is versioned in a way `.just-shared/`
-# never was. Once published, these become "mkrun>=0.1" and
-# "make-recipes-optersoft>=0.1" and nothing else changes.
+# The runner is public (https, no key needed); the recipes are private (ssh).
+# `make --sync` pins the exact commit of each into Makefile.py.lock, so this is
+# versioned in a way `.just-shared/` never was -- and `make --sync --upgrade`
+# is how a pin moves. Once mkrun is on PyPI its line becomes "mkrun>=0.1".
 
 from __future__ import annotations
 
