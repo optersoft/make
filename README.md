@@ -63,7 +63,8 @@ the wrong thing, a worktree that silently started with no environment at all, an
 export that was a no-op for two repos out of five. All of them are properties of
 small functions, and all of them are tests now.
 
-Migrating from `just`, including the full translation table: `docs/from-just.md`.
+`docs/why.md` names them, one by one, with the commits. Migrating, including the
+full translation table: `docs/from-just.md`.
 
 ## Recipes
 
