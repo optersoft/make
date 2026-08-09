@@ -21,9 +21,9 @@ file's hook that a consumer replaces.
 
 from __future__ import annotations
 
-from make_recipes_optersoft import box, database, web  # noqa: F401 -- importing registers
-
 from make import env, recipe, sh, step
+
+from make_recipes_optersoft import box, database, web  # noqa: F401 -- importing registers
 
 web.Web.configure(
     bin="broker-web",

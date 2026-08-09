@@ -21,9 +21,9 @@ recipes could fail for the wrong reason.
 
 from __future__ import annotations
 
-from make_recipes_optersoft import agent, web
-
 from make import recipe, sh
+
+from make_recipes_optersoft import agent, web
 
 agent.Agent.configure(gate="cargo check --workspace --features server")
 

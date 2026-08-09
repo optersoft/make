@@ -23,9 +23,9 @@ session with `make web.start -- --debug-symbols=true`.
 
 from __future__ import annotations
 
-from make_recipes_optersoft import android, box, database, play, web  # noqa: F401
-
 from make import recipe, sh
+
+from make_recipes_optersoft import android, box, database, play, web  # noqa: F401
 
 # Deploy target and smoke host. Real values belong in ~/.make/alma.env, not in a
 # tracked file -- `env.require("ALMA_DEPLOY_HOST")` reads them at run time.

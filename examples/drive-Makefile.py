@@ -21,9 +21,9 @@ collide with anything.
 
 from __future__ import annotations
 
-from make_recipes_optersoft import android, box, database, play  # noqa: F401 -- importing registers
-
 from make import recipe, sh
+
+from make_recipes_optersoft import android, box, database, play  # noqa: F401 -- importing registers
 
 android.Android.configure(module="drive-android", pkg="com.optersoft.drive")
 

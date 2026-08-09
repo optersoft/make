@@ -5,14 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from make_recipes_optersoft import android, play
-from make_recipes_optersoft.android import Android
-from make_recipes_optersoft.play import Play
-
 from make.errors import Aborted, MakeError, RecipeError
 from make.recipes import registry
 from make.runner import run_one
 from make.testing import context, record
+
+from make_recipes_optersoft import android, play
+from make_recipes_optersoft.android import Android
+from make_recipes_optersoft.play import Play
 
 
 @pytest.fixture(autouse=True)

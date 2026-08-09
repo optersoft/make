@@ -28,9 +28,9 @@ Here it is a filtered dictionary, which cannot accidentally evaluate anything.
 
 from __future__ import annotations
 
-from make_recipes_optersoft import box, database, web  # noqa: F401 -- importing registers
-
 from make import env, recipe
+
+from make_recipes_optersoft import box, database, web  # noqa: F401 -- importing registers
 
 web.Web.configure(
     bin="academy",
