@@ -1,0 +1,76 @@
+[project]
+name = "mkrun"
+version = "0.1.0"
+description = "A command runner whose recipes are Python -- shareable as versioned packages."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "optersoft", email = "david@optersoft.com" }]
+keywords = ["task runner", "command runner", "just", "make", "recipes", "uv"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Build Tools",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/optersoft/make"
+Source = "https://github.com/optersoft/make"
+
+# `make` shadows GNU make on PATH -- a deliberate choice, with `mk` shipped as a
+# non-shadowing alias for repos that also use a real Makefile.
+[project.scripts]
+make = "make.cli:console_main"
+mk = "make.cli:console_main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/make"]
+
+# An sdist defaults to the whole project directory, which here would ship
+# optersoft's internal recipe package, the per-repo example configs and the
+# migration notes to anyone running `pip download mkrun`. This distribution is
+# the generic tool; the recipes are a separate one.
+[tool.hatch.build.targets.sdist]
+only-include = ["src/make", "tests", "README.md", "LICENSE", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.format]
+# Building an argv list is this tool's central idiom. Honouring the magic
+# trailing comma explodes every `sh("cmd", "--flag", value)` to one token per
+# line, which makes the command being run unreadable -- the opposite of the
+# point. Packing to the line length keeps a command looking like a command.
+skip-magic-trailing-comma = true
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+# E501: line length is handled by the formatter.
+# B008: `field(default_factory=...)` and `arg(...)` in defaults are the point.
+# RUF012: config sections are dataclasses; mutable defaults are declared properly.
+# SIM117: nested `with` blocks read better when one is a pytest.raises assertion.
+# RUF022: __all__ is grouped by role (authoring / output / types / errors),
+#         which is more useful to a reader than alphabetical order.
+ignore = ["E501", "B008", "RUF012", "SIM117", "RUF022"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests deliberately redefine names to exercise duplicate-registration errors.
+"tests/**" = ["F811", "B006"]

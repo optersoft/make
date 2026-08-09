@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install ${{ matrix.python }}
+      - run: uv sync --all-extras --python ${{ matrix.python }}
+      - name: Lint
+        run: |
+          uv run ruff check src tests Makefile.py
+          uv run ruff format --check src tests Makefile.py
+      - name: Test
+        run: uv run pytest
+      # Startup latency is a feature: a command runner typed dozens of times an
+      # hour gets abandoned if it stops feeling instant. tests/test_startup.py
+      # enforces the budget; this prints the number so a regression is visible
+      # in the log before it fails the build.
+      - name: Startup latency
+        run: uv run make dev.bench

@@ -1,0 +1,60 @@
+name: Release
+
+# Publishes to PyPI through Trusted Publishing (OIDC), so no API token exists
+# anywhere -- not in repository secrets, not on a laptop. Configure the
+# publisher once at https://pypi.org/manage/project/mkrun/settings/publishing/
+# with: owner `optersoft`, repository `make`, workflow `release.yml`,
+# environment `pypi`.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-extras
+      - name: Verify before shipping
+        run: |
+          uv run ruff check src tests Makefile.py
+          uv run ruff format --check src tests Makefile.py
+          uv run pytest
+      - name: Check the tag matches the version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(uv run python -c 'import make; print(make.__version__)')"
+          if [ "$tag" != "$version" ]; then
+            echo "tag v$tag does not match __version__ $version" >&2
+            exit 1
+          fi
+        if: startsWith(github.ref, 'refs/tags/v')
+      - run: uv build
+      # The sdist must stay the tool alone: it defaulted to the whole project
+      # directory once and swept in a sibling package's sources.
+      - name: The sdist contains only the tool
+        run: |
+          unexpected="$(tar tzf dist/*.tar.gz | sed 's|^[^/]*/||' \
+            | grep -vE '^(src/make/|tests/|README.md|LICENSE|pyproject.toml|PKG-INFO|\.gitignore|$)' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "unexpected files in the sdist:" >&2; echo "$unexpected" >&2; exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write        # the OIDC token Trusted Publishing exchanges
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
