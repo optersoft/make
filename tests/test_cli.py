@@ -345,3 +345,16 @@ def test_version_names_the_distribution(repo: Path, capsys):
     out = capsys.readouterr().out
     assert out.startswith("mkrun ")
     assert "make" in out
+
+
+def test_bootstrap_checks_name_the_distribution_not_the_import_name():
+    """`make` is the import name; `mkrun` is the distribution.
+
+    An environment carrying both -- easy after the rename, or by installing the
+    unrelated PyPI `make` -- once made a dependency check pass locally and fail
+    in CI. Nothing here may depend on a distribution called `make` existing.
+    """
+    source = Path(__file__).read_text()
+    for line in source.splitlines():
+        if "ScriptMetadata(dependencies=" in line:
+            assert '"make' not in line and "'make" not in line, line

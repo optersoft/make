@@ -14,8 +14,27 @@ SOURCES = ["src", "tests", "Makefile.py"]
 
 @recipe(group="dev", requires=["uv"])
 def sync() -> None:
-    """Install the workspace, both packages, in editable mode."""
+    """Install the project in editable mode.
+
+    Also removes a stray `make` distribution. The import name is `make` but the
+    distribution is `mkrun`, so an environment carrying both -- easy to end up
+    with after the rename, or by installing the unrelated PyPI `make` -- makes
+    dependency checks pass locally that fail everywhere else. One did.
+    """
     sh("uv", "sync", "--all-extras")
+    if _installed("make"):
+        warn("removing a stray `make` distribution; this project's is `mkrun`")
+        sh("uv", "pip", "uninstall", "make")
+
+
+def _installed(distribution: str) -> bool:
+    import importlib.metadata as metadata
+
+    try:
+        metadata.version(distribution)
+    except metadata.PackageNotFoundError:
+        return False
+    return True
 
 
 @recipe(group="dev", requires=["uv"])
