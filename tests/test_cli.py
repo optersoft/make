@@ -215,17 +215,22 @@ def test_a_file_without_metadata_never_bootstraps(project: Path):
 
 
 def test_a_satisfied_dependency_does_not_bootstrap():
-    assert not needs_bootstrap(ScriptMetadata(dependencies=["make>=0.1"]))
+    """Names the distribution, `mkrun` -- not the import name, `make`.
+
+    Written as "make>=0.1" this passed on a machine with a pre-rename install
+    still lying around and failed everywhere else.
+    """
+    assert not needs_bootstrap(ScriptMetadata(dependencies=["mkrun>=0.1"]))
 
 
 def test_an_unsatisfied_dependency_bootstraps():
-    assert needs_bootstrap(ScriptMetadata(dependencies=["make>=99"]))
+    assert needs_bootstrap(ScriptMetadata(dependencies=["mkrun>=99"]))
     assert needs_bootstrap(ScriptMetadata(dependencies=["not-a-real-package-xyz"]))
 
 
 def test_an_unparseable_specifier_bootstraps_rather_than_guessing():
-    assert needs_bootstrap(ScriptMetadata(dependencies=["make @ git+ssh://example/x"]))
-    assert needs_bootstrap(ScriptMetadata(dependencies=['make; python_version < "3.0"']))
+    assert needs_bootstrap(ScriptMetadata(dependencies=["mkrun @ git+ssh://example/x"]))
+    assert needs_bootstrap(ScriptMetadata(dependencies=['mkrun; python_version < "3.0"']))
 
 
 # -- the lockfile ----------------------------------------------------------

@@ -54,6 +54,10 @@ addopts = "-q"
 line-length = 110
 target-version = "py311"
 
+[tool.ruff.lint.isort]
+# Paired with format.skip-magic-trailing-comma below; ruff warns if they disagree.
+split-on-trailing-comma = false
+
 [tool.ruff.format]
 # Building an argv list is this tool's central idiom. Honouring the magic
 # trailing comma explodes every `sh("cmd", "--flag", value)` to one token per
