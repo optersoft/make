@@ -1,0 +1,49 @@
+[project]
+name = "make-recipes-optersoft"
+version = "0.1.0"
+description = "optersoft's shared recipes for `make` (mkrun) -- the successor to github.com/optersoft/just."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "optersoft", email = "david@optersoft.com" }]
+dependencies = ["mkrun>=0.1"]
+
+[project.optional-dependencies]
+# Only `play.reviews` needs these; everything else shells out to a CLI.
+play = ["google-auth>=2", "requests>=2"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/make_recipes_optersoft"]
+
+[project.urls]
+Source = "https://github.com/optersoft/make-recipes"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+# Until mkrun is on PyPI, take the tool straight from its repo. Once published,
+# delete this block -- the `mkrun>=0.1` requirement above is already correct.
+[tool.uv.sources]
+mkrun = { git = "https://github.com/optersoft/make.git" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.format]
+skip-magic-trailing-comma = true
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["E501", "B008", "RUF012", "SIM117", "RUF022"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["F811", "B006"]
