@@ -25,11 +25,6 @@ Source = "https://github.com/optersoft/make-recipes"
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]
 
-# Until mkrun is on PyPI, take the tool straight from its repo. Once published,
-# delete this block -- the `mkrun>=0.1` requirement above is already correct.
-[tool.uv.sources]
-mkrun = { git = "https://github.com/optersoft/make.git" }
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

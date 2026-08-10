@@ -306,7 +306,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "google-auth", marker = "extra == 'play'", specifier = ">=2" },
-    { name = "mkrun", git = "https://github.com/optersoft/make.git" },
+    { name = "mkrun", specifier = ">=0.1" },
     { name = "requests", marker = "extra == 'play'", specifier = ">=2" },
 ]
 provides-extras = ["play"]
@@ -320,7 +320,11 @@ dev = [
 [[package]]
 name = "mkrun"
 version = "0.1.0"
-source = { git = "https://github.com/optersoft/make.git#f27253638836db250c7f0a0b75dce3c7752082d7" }
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d4/1f/0a8dab19d759e46c149a307d28e8c39d8af41eb4f782b69e67d088c42368/mkrun-0.1.0.tar.gz", hash = "sha256:32179f136aeebaebe628d8e2bd280729d4a618411aff0c66b236f58de6d21c0c", size = 54546, upload-time = "2026-08-10T08:06:46.017Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9f/06/73711c5ab5b50cc38db7ae52fa3dd86d05bee67949f3c9c7c38324b122c9/mkrun-0.1.0-py3-none-any.whl", hash = "sha256:eea8d837f18c1fe52f9f0c5856a8e6165e2408676bce41586d79929931507fbe", size = 50914, upload-time = "2026-08-10T08:06:44.795Z" },
+]
 
 [[package]]
 name = "packaging"

@@ -9,15 +9,15 @@ recipes could fail for the wrong reason.
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#   "mkrun @ git+https://github.com/optersoft/make.git",
+#   "mkrun>=0.1",
 #   "make-recipes-optersoft @ git+ssh://git@github.com/optersoft/make-recipes.git",
 # ]
 # ///
 #
-# The runner is public (https, no key needed); the recipes are private (ssh).
-# `make --sync` pins the exact commit of each into Makefile.py.lock, so this is
-# versioned in a way `.just-shared/` never was -- and `make --sync --upgrade`
-# is how a pin moves. Once mkrun is on PyPI its line becomes "mkrun>=0.1".
+# The runner comes from PyPI; the recipes are private, so ssh. `make --sync`
+# pins both into Makefile.py.lock -- a version for mkrun, an exact commit for
+# the recipes -- which is versioned in a way `.just-shared/` never was.
+# `make --sync --upgrade` is how a pin moves.
 
 from __future__ import annotations
 

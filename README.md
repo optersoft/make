@@ -12,7 +12,7 @@ hosts, per-app dev ports, and the unattended-agent boundary.
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#   "mkrun",
+#   "mkrun>=0.1",
 #   "make-recipes-optersoft @ git+ssh://git@github.com/optersoft/make-recipes.git",
 # ]
 # ///
