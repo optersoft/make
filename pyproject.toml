@@ -120,3 +120,9 @@ ignore = ["E501", "B008", "RUF012", "SIM117", "RUF022"]
 # file, so `tests/**` alone would not reach the optersoft package.
 "tests/**" = ["F811", "B006"]
 "optersoft/tests/**" = ["F811", "B006"]
+# The examples are verbatim copies of files that live in other repositories,
+# where `make` is an ordinary third-party import. Here `src` marks it
+# first-party, so isort wants a different order in the copy than in the
+# original -- and the original is the one that has to be right. Keeping them
+# byte-identical is worth more than import grouping in a file nobody imports.
+"optersoft/examples/**" = ["I001"]
