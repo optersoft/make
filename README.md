@@ -253,7 +253,7 @@ dependencies there instead and `mk --sync` runs `uv sync`.
 Publishing a recipe package is publishing a wheel. Nothing about it is special:
 
 ```python
-# make_recipes_yourthing/__init__.py
+# acme_recipes/__init__.py
 from make import group, sh
 
 docker = group("docker")
@@ -263,6 +263,39 @@ def build(*, tag: str = "latest") -> None:
     """Build the image."""
     sh("docker", "build", "-t", f"app:{tag}", ".")
 ```
+
+### Where a package comes from
+
+A registry is not the only answer, and often not the right one: recipes that
+wrap *your* tool belong in the repository that builds it, so the tool and the
+recipe that drives it change in one commit. Name the source and uv fetches it —
+the same two forms cargo offers:
+
+```python
+# /// script
+# dependencies = ["mkrun>=0.1", "acme-recipes>=0.4"]
+#
+# [tool.uv.sources]
+# acme-recipes = { git = "ssh://git@github.com/acme/tool.git", subdirectory = "make" }
+# ///
+```
+
+`mk --sync --add acme-recipes --git ssh://…` writes that for you, and
+`mk --doctor` prints where each package actually resolved from — a source is the
+one thing about a dependency you cannot see by reading the file.
+
+To work on a package and its consumer at the same time, redirect it to a
+checkout without touching the committed file — cargo's `[patch]`:
+
+```toml
+# .make/sources.toml, gitignored. ~/.make/sources.toml covers every repo at
+# once; relative paths resolve against the repo root either way.
+[sources]
+acme-recipes = { path = "../tool/make" }
+```
+
+An override is local by definition, so nothing is written to the lockfile while
+one is in force — a path pins no commit.
 
 ## Testing recipes
 
@@ -285,7 +318,7 @@ runner, not the function.
 ## Command line
 
 ```
-make [options] <recipe> [arguments] [<recipe> [arguments] ...]
+mk [options] <recipe> [arguments] [<recipe> [arguments] ...]
 
 -l, --list             list recipes (the default with no recipe)
 -h, --help [RECIPE]    help, or full help for one recipe
@@ -299,14 +332,17 @@ make [options] <recipe> [arguments] [<recipe> [arguments] ...]
 -F, --file PATH        use this recipe file
 -e, --env KEY=VALUE    set a variable for every command
     --json             machine-readable --list
-    --doctor           check every declared tool
+    --doctor           every declared tool, and where each package resolved from
     --sync             resolve and pin dependencies
+    --upgrade          with --sync, move the pins
+    --add PKG          with --sync, add a package (--path DIR | --git URL)
     --completions SH   bash | zsh | fish
 ```
 
 Recipe files, searched from the current directory upward: `Makefile.py`,
 `makefile.py`, `mk.py`, `.make/main.py`. Not `make.py` — that name can shadow
-`import make`.
+`import make`. (A `make/` *directory* is fine: namespace packages rank below
+installed ones, so it cannot shadow anything.)
 
 ## Repository layout
 
