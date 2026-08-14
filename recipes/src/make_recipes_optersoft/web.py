@@ -322,6 +322,27 @@ def preflight() -> None:
 # --------------------------------------------------------------------------
 
 
+def manifest_dir(start: Path) -> Path:
+    """The nearest directory at or above `start`, within the repo, holding a Cargo.toml.
+
+    `cargo metadata` has to run somewhere with a manifest. Most repos here have
+    one at the root, so the repo root worked -- but drive has none: its crates
+    are siblings and the stylesheet belongs to drive-web, so cargo failed with
+    "could not find Cargo.toml". Resolving from the crate that owns the
+    stylesheet is the same answer wherever a root manifest exists, because cargo
+    reports the whole workspace from any member, and the right one where it does
+    not. Falls back to the repo root, which keeps the old behaviour for a repo
+    with no manifest anywhere.
+    """
+    candidate = start
+    while True:
+        if (candidate / "Cargo.toml").is_file():
+            return candidate
+        if candidate == ctx.root or candidate == candidate.parent:
+            return ctx.root
+        candidate = candidate.parent
+
+
 @web.recipe(name="tailwind-sources")
 def tailwind_sources() -> Path | None:
     """Regenerate the `@source` globs pointing Tailwind at the shared crates.
@@ -337,9 +358,10 @@ def tailwind_sources() -> Path | None:
     """
     if not Web.css_in:
         return None
-    out = ctx.root / Path(Web.css_in).parent / "tailwind-sources.css"
+    css_dir = ctx.root / Path(Web.css_in).parent
+    out = css_dir / "tailwind-sources.css"
 
-    metadata = sh.out("cargo", "metadata", "--format-version", "1", dry="{}")
+    metadata = sh.out("cargo", "metadata", "--format-version", "1", cwd=manifest_dir(css_dir), dry="{}")
     # A registry crate's directory carries a -<version> suffix, so
     # `dioxus-core-0.7.9/Cargo.toml` cannot match this shape -- only git checkouts.
     import re

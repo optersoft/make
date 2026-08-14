@@ -243,6 +243,36 @@ def test_tailwind_sources_are_generated_from_cargo_metadata(tmp_path: Path):
     assert "dioxus-core" not in written
 
 
+def test_cargo_metadata_runs_at_the_root_when_the_root_holds_the_manifest(tmp_path: Path):
+    (tmp_path / "Cargo.toml").write_text("[workspace]\n")
+    (tmp_path / "web/assets").mkdir(parents=True)
+    with context(root=tmp_path):
+        assert web.manifest_dir(tmp_path / "web/assets") == tmp_path
+
+
+def test_cargo_metadata_runs_in_the_crate_that_owns_the_stylesheet(tmp_path: Path):
+    """drive has no root manifest: its crates are siblings, and cargo failed there.
+
+    `cargo metadata` at the repo root reported "could not find Cargo.toml in
+    /drive or any parent directory", so `web.start` could not even generate the
+    @source globs it depends on.
+    """
+    (tmp_path / "drive-web/assets").mkdir(parents=True)
+    (tmp_path / "drive-web/Cargo.toml").write_text("[package]\nname = 'drive-web'\n")
+    with context(root=tmp_path):
+        assert web.manifest_dir(tmp_path / "drive-web/assets") == tmp_path / "drive-web"
+
+
+def test_the_manifest_search_stops_at_the_repo_root(tmp_path: Path):
+    """A Cargo.toml in a sibling checkout above the repo is not this repo's."""
+    (tmp_path / "outside.toml").write_text("")  # stands in for a parent-level manifest
+    (tmp_path / "Cargo.toml").write_text("[workspace]\n")
+    repo = tmp_path / "repo"
+    (repo / "assets").mkdir(parents=True)
+    with context(root=repo):
+        assert web.manifest_dir(repo / "assets") == repo
+
+
 def test_a_repo_without_tailwind_generates_nothing(tmp_path: Path):
     Web.configure(css_in="", css_out="")
     with context(root=tmp_path), record() as rec:
