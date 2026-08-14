@@ -9,19 +9,19 @@ from pathlib import Path
 
 from make import note, recipe, sh, step, warn
 
-# Both workspace members, listed as Python paths rather than as `recipes/`.
+# Both workspace members, listed as Python paths rather than as `optersoft/`.
 # Ruff formats Python code blocks inside markdown too, and the whole directory
 # hands it docs/ -- where the examples are hand-packed to read as prose and
 # reformatting them is a docs edit disguised as a lint fix.
-SOURCES = ["src", "tests", "Makefile.py", "recipes/src", "recipes/tests", "recipes/examples"]
+SOURCES = ["src", "tests", "Makefile.py", "optersoft/src", "optersoft/tests", "optersoft/examples"]
 
 
 @recipe(group="dev", requires=["uv"])
 def sync() -> None:
     """Install both workspace members in editable mode.
 
-    `--all-packages` is what reaches recipes/; a plain `uv sync` installs the
-    root project only, and then recipes/tests fail on import rather than on
+    `--all-packages` is what reaches optersoft/; a plain `uv sync` installs the
+    root project only, and then optersoft/tests fail on import rather than on
     anything real.
 
     Also removes a stray `make` distribution. The import name is `make` but the

@@ -303,11 +303,18 @@ Recipe files, searched from the current directory upward: `Makefile.py`,
 
 ## Repository layout
 
-`src/` is this tool. `recipes/` is a second, separate distribution —
-`make-recipes-optersoft`, the author's own fleet recipes — kept here as a uv
-workspace member so a change to the runner is tested against real recipes in the
-same commit. It is excluded from the `mkrun` sdist and wheel; installing this
-tool never installs it.
+`src/` is this tool. `optersoft/` is a second, separate distribution —
+`optersoft-make`, the author's own fleet recipes — kept here as a uv workspace
+member so a change to the runner is tested against real recipes in the same
+commit. It is excluded from the `mkrun` sdist and wheel; installing this tool
+never installs it.
+
+That directory is named after its *owner*, not after this repository, because
+that is the convention the tool encourages: a project ships its recipes in its
+own `make/` directory, as `<project>-make`, and consumers name the source.
+`hetzner-make` (the `box` group, beside the `hetzner-box` CLI it wraps) is the
+first one; `optersoft-make` is what is left once every group that belongs to a
+project has gone to live there.
 
 ## Status
 

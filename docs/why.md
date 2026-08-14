@@ -8,7 +8,7 @@ Nothing below is hypothetical. Each item is either a rule that repository's own
 contributor guide states as deliberate design, or a `fix(...)` / `revert(...)`
 commit. The repositories quoted are private, so the excerpts are reproduced
 here rather than linked; the recipes themselves are a separate
-`make-recipes-optersoft` package, built from this repository's `recipes/` and
+`optersoft-make` package, built from this repository's `optersoft/` and
 never shipped as part of `mkrun`, which is exactly the point — **the runner is
 generic, and a fleet's recipes are just its first consumer.**
 
@@ -98,7 +98,7 @@ what version a given checkout is on.
 ```python
 # make
 # /// script
-# dependencies = ["mkrun>=0.1", "make-recipes-optersoft>=0.4"]
+# dependencies = ["mkrun>=0.1", "optersoft-make>=0.4"]
 # ///
 ```
 
