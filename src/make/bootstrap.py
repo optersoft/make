@@ -22,6 +22,22 @@ under `uv run`, which resolves into a cached environment. Pin it with
 The satisfaction check errs toward re-executing: a specifier it cannot parse
 counts as unsatisfied. Being needlessly slow is recoverable; running a recipe
 against the wrong version of its library is not.
+
+A recipe package can also come from the repository that owns it, declared the
+way the Rust crates here declare each other:
+
+    # [tool.uv.sources]
+    # hetzner-recipes = { path = "../hetzner/recipes" }
+
+That table is only visible to `uv sync --script`, which reads the file --
+`uv run --with` builds an environment from bare requirements and never opens it.
+So a file declaring sources takes the script path, and a file that does not
+keeps the faster `--with` one. Getting this wrong is silent: the requirement
+still resolves, just to whatever PyPI has under that name.
+
+`.make/sources.toml` redirects a package to a local checkout without touching
+the committed file -- cargo's `[patch]`. uv has no external source override, so
+that one is applied by generating a script that carries the rewritten table.
 """
 
 from __future__ import annotations
@@ -52,6 +68,14 @@ _REQUIREMENT = re.compile(
 
 _CLAUSE = re.compile(r"(?P<op>==|!=|>=|<=|~=|>|<)\s*(?P<version>[0-9A-Za-z.*+!-]+)")
 
+#: Where a repo, or the user, redirects a recipe package to a local checkout.
+SOURCES_FILE = "sources.toml"
+
+
+def canonical_name(name: str) -> str:
+    """PEP 503 normalisation, so `Foo_Bar` and `foo-bar` are the same package."""
+    return re.sub(r"[-_.]+", "-", name).strip().lower()
+
 
 @dataclass
 class ScriptMetadata:
@@ -64,6 +88,18 @@ class ScriptMetadata:
     @property
     def empty(self) -> bool:
         return not self.dependencies and not self.requires_python
+
+    @property
+    def sources(self) -> dict[str, dict]:
+        """The `[tool.uv.sources]` table: where each dependency comes from.
+
+        This is how a recipe package is consumed from the repository that owns
+        it -- `{ path = "../hetzner/recipes" }` for a checkout beside this one,
+        `{ git = "ssh://...", subdirectory = "recipes" }` otherwise -- the same
+        split the Rust crates here use.
+        """
+        table = self.raw.get("tool", {}).get("uv", {}).get("sources", {})
+        return {canonical_name(name): spec for name, spec in table.items()} if table else {}
 
 
 def read_metadata(path: Path) -> ScriptMetadata:
@@ -173,6 +209,13 @@ def needs_bootstrap(metadata: ScriptMetadata) -> bool:
         return False
     if not metadata.dependencies:
         return False
+    if metadata.sources:
+        # A source moves the *where* out of the requirement, so what is left is
+        # a bare `hetzner-recipes>=0.1` that an already-installed copy would
+        # satisfy -- from PyPI, or from the wrong checkout. The version check
+        # cannot see the difference, so it does not get to decide.
+        debug("bootstrap: the recipe file declares [tool.uv.sources]")
+        return True
     for requirement in metadata.dependencies:
         if not _requirement_met(requirement):
             debug(f"bootstrap: {requirement!r} not satisfied by the current interpreter")
@@ -195,7 +238,7 @@ def _requirement_name(requirement: str) -> str:
     text = requirement.split(";", 1)[0].strip()
     text = text.split("@", 1)[0].strip()  # "pkg @ git+ssh://..." -> "pkg"
     match = _REQUIREMENT.match(text)
-    return (match.group("name") if match else text).replace("_", "-").lower()
+    return canonical_name(match.group("name") if match else text)
 
 
 def _declares_self(metadata: ScriptMetadata) -> bool:
@@ -233,25 +276,147 @@ def lock_path(path: Path) -> Path:
     return path.with_name(path.name + ".lock")
 
 
-def locked_interpreter(path: Path, uv: str) -> str | None:
-    """The interpreter of the environment `uv` materialised from the lockfile.
+# --------------------------------------------------------------------------
+# Local source overrides -- cargo's `[patch]`, for recipe packages
+# --------------------------------------------------------------------------
 
-    Without this, `make --sync` would write a lockfile that nothing reads, and
-    the pinning it promises would be decorative -- which is worse than no
-    lockfile at all. `uv sync --script` builds the environment from the lock,
-    and `uv python find --script` reports where it went.
 
-    Returns None whenever anything is off (no lock, sync failed, the environment
-    somehow lacks `make`), so the caller falls back to resolving from the
-    declared ranges. A slower correct path beats a fast wrong one.
+def override_files(root: Path) -> list[Path]:
+    """The `sources.toml` layers that apply here, lowest precedence first.
+
+    `~/.make/sources.toml` covers every repo at once, which is what you want
+    when the whole fleet is checked out side by side; the repo's own
+    `.make/sources.toml` then overrides it. Both are gitignored: an override
+    says something about this machine, not about the project.
     """
-    if not lock_path(path).is_file():
-        return None
+    from . import env as env_module
+
+    candidates = [env_module.config_dir() / SOURCES_FILE, root / ".make" / SOURCES_FILE]
+    return [path for path in candidates if path.is_file()]
+
+
+def read_overrides(root: Path) -> dict[str, dict]:
+    """Merge the `sources.toml` layers into `{package: source spec}`.
+
+    A relative `path` resolves against the *repo root*, not against the file it
+    was written in, so one line in `~/.make/sources.toml` --
+    `hetzner-recipes = { path = "../hetzner/recipes" }` -- is correct from
+    inside every sibling checkout.
+    """
+    import tomllib
+
+    merged: dict[str, dict] = {}
+    for file in override_files(root):
+        try:
+            data = tomllib.loads(file.read_text(encoding="utf-8"))
+        except Exception as exc:
+            raise MakeError(f"{file}: not valid TOML -- {exc}") from exc
+        table = data.get("sources") or {}
+        if not isinstance(table, dict):
+            raise MakeError(f"{file}: [sources] must be a table of package = {{ path = ... }}")
+        for name, spec in table.items():
+            if not isinstance(spec, dict) or "path" not in spec:
+                raise MakeError(
+                    f"{file}: source for {name!r} must be a table with a `path`",
+                    hint='  [sources]\n  hetzner-recipes = { path = "../hetzner/recipes" }',
+                )
+            resolved = Path(spec["path"]).expanduser()
+            if not resolved.is_absolute():
+                resolved = (root / resolved).resolve()
+            if not resolved.is_dir():
+                raise MakeError(
+                    f"{file}: {name} points at {resolved}, which is not a directory",
+                    hint="check the sibling checkout is where the override says it is",
+                )
+            merged[canonical_name(name)] = {**spec, "path": str(resolved), "origin": str(file)}
+    return merged
+
+
+def _inline_table(spec: dict) -> str:
+    """Serialise a source spec back to a TOML inline table (strings and bools only)."""
+
+    def value(item: object) -> str:
+        if isinstance(item, bool):
+            return "true" if item else "false"
+        return '"' + str(item).replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+    body = ", ".join(f"{key} = {value(val)}" for key, val in spec.items() if key != "origin")
+    return "{ " + body + " }"
+
+
+def write_shim(recipe_file: Path, metadata: ScriptMetadata, overrides: dict[str, dict]) -> Path:
+    """Generate the script uv resolves when a local override is in force.
+
+    uv has no way to redirect a script's source from outside the script: `uv
+    sync` takes no `--with`, `uv run --script` runs *that* script, and
+    `--no-sources-package` can only switch a source off, not replace it. So the
+    override is expressed the only way uv accepts one -- in script metadata --
+    by generating a script that carries the rewritten table and does nothing but
+    hand control back to `make`.
+
+    Deliberately not locked: a path source pins no commit, exactly like a cargo
+    path dependency. The committed recipe file and its lockfile are untouched.
+    """
+    from .discovery import recipe_root
+
+    sources = dict(metadata.sources)
+    for name, spec in overrides.items():
+        if name in {_requirement_name(r) for r in metadata.dependencies}:
+            sources[name] = {"path": spec["path"], "editable": True}
+
+    lines = ["# /// script"]
+    if metadata.requires_python:
+        lines.append(f'# requires-python = "{metadata.requires_python}"')
+    lines.append("# dependencies = [")
+    lines += [f'#   "{dependency}",' for dependency in metadata.dependencies]
+    lines.append("# ]")
+    if sources:
+        lines.append("#")
+        lines.append("# [tool.uv.sources]")
+        lines += [f"# {name} = {_inline_table(spec)}" for name, spec in sorted(sources.items())]
+    lines.append("# ///")
+
+    shim = recipe_root(recipe_file) / ".make" / "bootstrap.py"
+    shim.parent.mkdir(parents=True, exist_ok=True)
+    shim.write_text(
+        "\n".join(lines)
+        + f'''
+"""GENERATED by `make` -- do not edit, do not commit.
+
+The environment for {recipe_file.name}, with the sources in
+{", ".join(sorted({spec["origin"] for spec in overrides.values()}))}
+applied. Delete the override to go back to what the recipe file declares.
+"""
+
+import sys
+
+from make.cli import main
+
+sys.exit(main())
+''',
+        encoding="utf-8",
+    )
+    return shim
+
+
+def script_interpreter(path: Path, uv: str) -> str | None:
+    """The interpreter of the environment `uv` materialised for a script.
+
+    This is the only path that reads the script's own metadata, so it is the
+    only one where `[tool.uv.sources]` means anything -- `uv run --with` builds
+    an environment from bare requirements and never opens the file. It is also
+    what makes `make --sync` real: without it the lockfile would be decorative,
+    which is worse than no lockfile at all.
+
+    Returns None whenever anything is off (sync failed, the environment somehow
+    lacks `make`), so the caller can fall back. A slower correct path beats a
+    fast wrong one.
+    """
     synced = subprocess.run(
         [uv, "sync", "--script", str(path), "--quiet"], capture_output=True, text=True, check=False
     )
     if synced.returncode != 0:
-        debug(f"bootstrap: uv sync --script failed, ignoring the lockfile\n{synced.stderr.strip()}")
+        debug(f"bootstrap: uv sync --script {path.name} failed\n{synced.stderr.strip()}")
         return None
     found = subprocess.run(
         [uv, "python", "find", "--script", str(path)], capture_output=True, text=True, check=False
@@ -261,7 +426,7 @@ def locked_interpreter(path: Path, uv: str) -> str | None:
         return None
     usable = subprocess.run([interpreter, "-c", "import make"], capture_output=True, check=False)
     if usable.returncode != 0:
-        debug("bootstrap: the locked environment has no `make` in it, ignoring the lockfile")
+        debug(f"bootstrap: the environment for {path.name} has no `make` in it, ignoring it")
         return None
     return interpreter
 
@@ -279,12 +444,37 @@ def reexec(metadata: ScriptMetadata, argv: list[str], recipe_file: Path | None =
     environment = dict(os.environ)
     environment[BOOTSTRAP_FLAG] = "1"
 
-    # Pinned wins: if there is a lockfile, run exactly what it says.
+    # Script mode, whenever the file says anything `uv run --with` cannot hear:
+    # a local override, a `[tool.uv.sources]` table, or a lockfile to obey.
+    # Only `uv sync --script` reads the file itself.
     if recipe_file is not None:
-        interpreter = locked_interpreter(recipe_file, uv)
-        if interpreter is not None:
-            debug(f"bootstrap: using the locked environment at {interpreter}")
-            return subprocess.run([interpreter, "-m", "make", *argv], env=environment, check=False).returncode
+        from .discovery import recipe_root
+
+        overrides = {
+            name: spec
+            for name, spec in read_overrides(recipe_root(recipe_file)).items()
+            if name in {_requirement_name(r) for r in metadata.dependencies}
+        }
+        script = recipe_file
+        if overrides:
+            script = write_shim(recipe_file, metadata, overrides)
+            for name, spec in sorted(overrides.items()):
+                note(f"{name} overridden -> {spec['path']}  ({Path(spec['origin']).name})")
+        if overrides or metadata.sources or lock_path(recipe_file).is_file():
+            interpreter = script_interpreter(script, uv)
+            if interpreter is not None:
+                debug(f"bootstrap: using the environment for {script.name} at {interpreter}")
+                return subprocess.run(
+                    [interpreter, "-m", "make", *argv], env=environment, check=False
+                ).returncode
+            if overrides or metadata.sources:
+                # Falling through to `--with` here would quietly resolve the
+                # package from PyPI instead of the checkout or repository the
+                # file names -- a different package with the same name.
+                raise MakeError(
+                    f"could not build the environment for {script.name}",
+                    hint=f"run `uv sync --script {script}` to see why; `make -v` shows the command",
+                )
 
     command = [uv, "run", "--quiet"]
     if metadata.requires_python:
@@ -321,6 +511,31 @@ def _bootstrap_marker(metadata: ScriptMetadata) -> Path:
     ).hexdigest()[:16]
     cache = os.environ.get("XDG_CACHE_HOME") or (Path.home() / ".cache")
     return Path(cache) / "make" / "bootstrap" / key
+
+
+def add(path: Path, package: str, *, source_path: str | None = None, git: str | None = None) -> int:
+    """Add a recipe package to the recipe file, with its source.
+
+    `uv add --script` writes both the requirement and the `[tool.uv.sources]`
+    entry, in the form uv itself will read back. Hand-editing the table is the
+    same job with more ways to get the quoting wrong, and a source uv cannot
+    parse fails at the least convenient moment.
+    """
+    uv = shutil.which("uv")
+    if uv is None:
+        raise MakeError("`uv` is not on PATH", hint="https://docs.astral.sh/uv/")
+    if source_path and git:
+        raise MakeError("--path and --git are two answers to one question; pass one")
+
+    command = [uv, "add", "--script", str(path), package]
+    if source_path:
+        # Editable, so the recipes a sibling checkout is currently on are the
+        # ones that run -- the point of pointing at a checkout at all.
+        command += ["--editable", source_path]
+    elif git:
+        command += ["--git", git]
+    note(f"adding {package} to {path.name}")
+    return subprocess.run(command, check=False).returncode
 
 
 def sync(path: Path, metadata: ScriptMetadata, *, upgrade: bool = False) -> int:

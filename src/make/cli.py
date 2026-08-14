@@ -48,6 +48,9 @@ options:
       --doctor           check that every declared tool is installed
       --sync             resolve and pin the recipe file's dependencies
       --upgrade          with --sync, move the pins to the newest allowed
+      --add PKG          with --sync, add a recipe package to the recipe file
+      --path DIR         with --add, take it from a checkout beside this one
+      --git URL          with --add, take it from a repository
       --completions SH   emit a completion script (bash, zsh, fish)
       --no-bootstrap     never re-execute through uv
       --traceback        show the full traceback on an unexpected error
@@ -76,6 +79,9 @@ class _Options:
         self.doctor = False
         self.sync = False
         self.upgrade = False
+        self.add: str | None = None
+        self.source_path: str | None = None
+        self.source_git: str | None = None
         self.completions: str | None = None
         self.names = False
         self.bootstrap = True
@@ -143,6 +149,12 @@ def _parse_global(argv: list[str]) -> tuple[_Options, list[str]]:
             options.sync = True
         elif name == "--upgrade":
             options.upgrade = True
+        elif name == "--add":
+            options.add = value(name)
+        elif name == "--path":
+            options.source_path = value(name)
+        elif name == "--git":
+            options.source_git = value(name)
         elif name == "--completions":
             options.completions = value(name)
         elif name == "--names":
@@ -309,7 +321,56 @@ def _print_recipe_help(item: Recipe) -> int:
     return 0
 
 
-def _doctor() -> int:
+def _recipe_packages(recipe_file: Path, metadata: object) -> None:
+    """Where each declared recipe package actually came from.
+
+    A source is the one thing about a recipe package you cannot see by reading
+    the recipe file alone: a `.make/sources.toml` may be redirecting it to a
+    checkout, and two copies of `box` from different places behave differently
+    while looking identical. This prints the answer rather than leaving it to be
+    deduced from a failure.
+    """
+    import importlib.metadata as md
+
+    from .bootstrap import _requirement_name, read_overrides
+    from .discovery import recipe_root
+
+    dependencies = getattr(metadata, "dependencies", [])
+    if not dependencies:
+        return
+
+    sources = getattr(metadata, "sources", {})
+    try:
+        overrides = read_overrides(recipe_root(recipe_file))
+    except MakeError as exc:  # a broken override file must not hide the rest
+        overrides = {}
+        warn(str(exc))
+
+    echo()
+    echo(paint("recipe packages", "bold"))
+    for requirement in dependencies:
+        name = _requirement_name(requirement)
+        try:
+            installed = md.version(name)
+        except md.PackageNotFoundError:
+            installed = ""
+        marker = paint("ok  ", "green") if installed else paint("--  ", "dim")
+
+        if name in overrides:
+            origin = f"path {overrides[name]['path']}"
+            suffix = paint(f"  (override: {Path(overrides[name]['origin']).name})", "yellow")
+        elif name in sources:
+            spec = sources[name]
+            detail = " ".join(f"{k}={v}" for k, v in spec.items() if k not in {"path", "git"})
+            origin = f"path {spec['path']}" if "path" in spec else f"git {spec.get('git', '?')}"
+            suffix = paint(f"  {detail}", "dim") if detail else ""
+        else:
+            origin, suffix = "PyPI", ""
+        label = f"{name} {installed}" if installed else name
+        echo(f"  {marker}{label:<28} {paint(origin, 'dim')}{suffix}")
+
+
+def _doctor(recipe_file: Path | None = None, metadata: object = None) -> int:
     import shutil
 
     echo(paint("tools declared by recipes", "bold"))
@@ -328,6 +389,9 @@ def _doctor() -> int:
         else:
             missing += 1
             echo(f"  {paint('MISS', 'red')}{tool:<18} {paint('needed by ' + users, 'dim')}")
+
+    if recipe_file is not None and metadata is not None:
+        _recipe_packages(recipe_file, metadata)
 
     echo()
     echo(paint("environment", "bold"))
@@ -410,6 +474,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
 
         metadata = read_metadata(recipe_file)
+        if options.add:
+            from .bootstrap import add
+
+            return add(recipe_file, options.add, source_path=options.source_path, git=options.source_git)
         if options.sync:
             return sync(recipe_file, metadata, upgrade=options.upgrade)
         if options.bootstrap and needs_bootstrap(metadata):
@@ -426,7 +494,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     print(alias)
             return 0
         if options.doctor:
-            return _doctor()
+            return _doctor(recipe_file, metadata)
         if isinstance(options.help, str):
             return _print_recipe_help(registry.require(options.help))
         if options.list or not tail:

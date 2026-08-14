@@ -242,21 +242,42 @@ def test_the_lockfile_path_matches_uvs_convention(project: Path):
     assert lock_path(project / "Makefile.py").name == "Makefile.py.lock"
 
 
-def test_no_lockfile_means_resolve_from_the_declared_ranges(project: Path):
-    from make.bootstrap import locked_interpreter
+def test_no_lockfile_and_no_sources_resolves_from_the_declared_ranges(project: Path, monkeypatch):
+    """The plain case stays on the fast path: `uv run --with`, no script sync.
 
-    assert locked_interpreter(project / "Makefile.py", "uv") is None
+    Script mode reads the file, which is what `[tool.uv.sources]` needs, but it
+    costs a `uv sync` per run. A file that declares neither a source nor a lock
+    has nothing to gain from it.
+    """
+    import subprocess
+
+    from make.bootstrap import ScriptMetadata, reexec
+
+    seen: list[list[str]] = []
+
+    def record(argv, *args, **kwargs):
+        seen.append(list(argv))
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", record)
+    reexec(ScriptMetadata(dependencies=["httpx"]), ["--list"], project / "Makefile.py")
+
+    assert seen, "nothing ran"
+    assert "--with" in seen[-1]
+    assert not any("sync" in command and "--script" in command for command in seen)
 
 
 def test_a_lockfile_uv_cannot_use_falls_back_rather_than_failing(project: Path, monkeypatch):
     """A slower correct path beats a fast wrong one.
 
     If the lock is stale, corrupt, or its environment somehow lacks `make`, the
-    run must still work -- by resolving from the declared ranges.
+    run must still work -- by resolving from the declared ranges. This is only
+    safe because no source is declared; when one is, resolving from the ranges
+    would silently fetch a different package, so `reexec` fails instead.
     """
     import subprocess
 
-    from make.bootstrap import locked_interpreter
+    from make.bootstrap import script_interpreter
 
     write(project / "Makefile.py", "x = 1\n")
     write(project / "Makefile.py.lock", "version = 1\n[[package]]\nname = 'bogus'\n")
@@ -265,7 +286,7 @@ def test_a_lockfile_uv_cannot_use_falls_back_rather_than_failing(project: Path, 
         return subprocess.CompletedProcess(argv, 1, "", "no solution found")
 
     monkeypatch.setattr(subprocess, "run", failing)
-    assert locked_interpreter(project / "Makefile.py", "uv") is None
+    assert script_interpreter(project / "Makefile.py", "uv") is None
 
 
 def test_a_file_that_declares_the_tool_gets_no_second_source():

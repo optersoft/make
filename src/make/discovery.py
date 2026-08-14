@@ -17,7 +17,7 @@ from pathlib import Path
 from .context import debug
 from .errors import RecipeError, UsageError
 
-__all__ = ["RECIPE_FILENAMES", "find_recipe_file", "load_recipe_file"]
+__all__ = ["RECIPE_FILENAMES", "find_recipe_file", "load_recipe_file", "recipe_root"]
 
 #: Searched in this order, in each directory from the cwd upward.
 RECIPE_FILENAMES = ("Makefile.py", "makefile.py", "mk.py", ".make/main.py")
@@ -59,12 +59,24 @@ def require_recipe_file(start: Path | None = None) -> Path:
     raise UsageError(f"no recipe file found in {here} or any parent", hint=hint)
 
 
-def load_recipe_file(path: Path) -> object:
-    """Import the recipe file, registering everything it defines."""
+def recipe_root(path: Path) -> Path:
+    """The project directory a recipe file governs.
+
+    Its own directory, except for `.make/main.py`, where the project is the
+    directory holding `.make/`. Recipes run here, and relative paths in a
+    `.make/sources.toml` override resolve against it.
+    """
     resolved = Path(path).resolve()
     root = resolved.parent
     if resolved.name == "main.py" and root.name == ".make":
         root = root.parent
+    return root
+
+
+def load_recipe_file(path: Path) -> object:
+    """Import the recipe file, registering everything it defines."""
+    resolved = Path(path).resolve()
+    root = recipe_root(resolved)
 
     root_str = str(root)
     if root_str not in sys.path:
