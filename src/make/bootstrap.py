@@ -399,6 +399,13 @@ sys.exit(main())
     return shim
 
 
+#: Why the last `script_interpreter` call failed, for the error the caller
+#: raises. uv's own message is the only thing that says *what* was wrong --
+#: without it a CI failure reads "could not build the environment" and nothing
+#: else, which is exactly how one cost an afternoon.
+_last_failure: str = ""
+
+
 def script_interpreter(path: Path, uv: str) -> str | None:
     """The interpreter of the environment `uv` materialised for a script.
 
@@ -412,11 +419,14 @@ def script_interpreter(path: Path, uv: str) -> str | None:
     lacks `make`), so the caller can fall back. A slower correct path beats a
     fast wrong one.
     """
+    global _last_failure
+    _last_failure = ""
     synced = subprocess.run(
         [uv, "sync", "--script", str(path), "--quiet"], capture_output=True, text=True, check=False
     )
     if synced.returncode != 0:
-        debug(f"bootstrap: uv sync --script {path.name} failed\n{synced.stderr.strip()}")
+        _last_failure = synced.stderr.strip()
+        debug(f"bootstrap: uv sync --script {path.name} failed\n{_last_failure}")
         return None
     found = subprocess.run(
         [uv, "python", "find", "--script", str(path)], capture_output=True, text=True, check=False
@@ -472,8 +482,9 @@ def reexec(metadata: ScriptMetadata, argv: list[str], task_file: Path | None = N
                 # package from PyPI instead of the checkout or repository the
                 # file names -- a different package with the same name.
                 raise MakeError(
-                    f"could not build the environment for {script.name}",
-                    hint=f"run `uv sync --script {script}` to see why; `mk -v` shows the command",
+                    f"could not build the environment for {script.name}"
+                    + (f"\n{_last_failure}" if _last_failure else ""),
+                    hint=f"reproduce with: uv sync --script {script}",
                 )
 
     command = [uv, "run", "--quiet"]

@@ -141,7 +141,12 @@ def test_a_task_package_resolves_from_git(project: Path):
     """The portable form. A local bare repo over file://, so this stays offline."""
     source = build_package(project / "provider", marker="git")
     bare = project / "provider.git"
-    subprocess.run(["git", "init", "--quiet", "--bare", str(bare)], check=True)
+    # `-b main` on the BARE repo too, not just the working one. Without it the
+    # bare repo's HEAD points at whatever `init.defaultBranch` says -- `master`
+    # on a stock runner -- while the push below creates `main`, so HEAD dangles
+    # and uv fails with "couldn't find remote ref HEAD". It passed on a machine
+    # configured for `main` and failed on every CI runner.
+    subprocess.run(["git", "init", "--quiet", "--bare", "-b", "main", str(bare)], check=True)
     for command in (
         ["git", "init", "--quiet", "-b", "main"],
         ["git", "add", "-A"],
