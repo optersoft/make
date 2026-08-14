@@ -53,12 +53,11 @@ only-include = ["src/make", "tests", "README.md", "LICENSE", "pyproject.toml"]
 [tool.uv.workspace]
 members = ["optersoft"]
 
-# The sibling repo that now owns the `box` group, resolved by path the way the
-# Rust crates here resolve each other -- so a change to `hetzner-box` and its
-# recipes is testable from this checkout with no publish step. A consumer picks
-# its own source; the built wheel just says `hetzner-make>=0.1`.
-[tool.uv.sources]
-hetzner-make = { path = "../hetzner/make", editable = true }
+# No source for `hetzner-make` here on purpose. It is an optional extra of the
+# optersoft member -- for the `box` shim only -- and pointing it at
+# ../hetzner/make would make this repository unbuildable without that sibling
+# checkout, which is exactly what CI and a fresh clone are. A consumer that
+# wants the group names its own source.
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "optersoft/tests"]

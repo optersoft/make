@@ -19,11 +19,19 @@ jobs:
         with:
           enable-cache: true
       - run: uv python install ${{ matrix.python }}
-      - run: uv sync --all-extras --python ${{ matrix.python }}
+      # --all-packages reaches the optersoft/ workspace member; pytest collects
+      # its suite too, so without it the run fails on an import rather than on
+      # anything real. Nothing here needs a sibling checkout: `hetzner-make` is
+      # named by neither member, precisely so this works on a bare clone.
+      - run: uv sync --all-extras --all-packages --python ${{ matrix.python }}
       - name: Lint
         run: |
-          uv run ruff check src tests Makefile.py
-          uv run ruff format --check src tests Makefile.py
+          uv run ruff check src tests Makefile.py optersoft/src optersoft/tests optersoft/examples
+          uv run ruff format --check src tests Makefile.py optersoft/src optersoft/tests optersoft/examples
+      # tests/test_sources.py builds real wheels and runs real `uv sync`s to
+      # prove a recipe package resolves from a path and from git. The git half
+      # uses a local bare repo over file://, so the only thing it fetches is a
+      # build backend on a cold cache.
       - name: Test
         run: uv run pytest
       # Startup latency is a feature: a command runner typed dozens of times an
@@ -32,3 +40,38 @@ jobs:
       # in the log before it fails the build.
       - name: Startup latency
         run: uv run make dev.bench
+
+  # A consumer takes a package from the repo that owns it, so the thing most
+  # likely to break is not covered above: this workspace resolving against a
+  # real sibling checkout. Cheap to prove, and it is how the fleet actually runs.
+  sibling:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: make
+      - uses: actions/checkout@v4
+        with:
+          repository: optersoft/hetzner
+          path: hetzner
+          ssh-key: ${{ secrets.HETZNER_DEPLOY_KEY }}
+        continue-on-error: true
+        id: sibling
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      # Skipped rather than failed when the key is absent: this job proves an
+      # integration, and a missing deploy key is not a broken runner.
+      - name: The box shim resolves against the hetzner checkout
+        if: steps.sibling.outcome == 'success'
+        working-directory: make
+        run: |
+          uv run --with-editable ../hetzner/make python -c '
+          from optersoft_make import box
+          from hetzner_make import box as owned
+          assert box.box is owned.box, "the shim must re-export, not redefine"
+          print("box re-exported from", owned.__name__)
+          '
+      - name: Say so when it was skipped
+        if: steps.sibling.outcome != 'success'
+        run: echo "::notice::no hetzner checkout (deploy key absent) -- shim integration not exercised"

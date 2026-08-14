@@ -345,23 +345,6 @@ wheels = [
 ]
 
 [[package]]
-name = "hetzner-make"
-version = "0.1.0"
-source = { editable = "../hetzner/make" }
-dependencies = [
-    { name = "mkrun" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "mkrun", specifier = ">=0.1" }]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8" },
-    { name = "ruff", specifier = ">=0.6" },
-]
-
-[[package]]
 name = "idna"
 version = "3.18"
 source = { registry = "https://pypi.org/simple" }
@@ -402,7 +385,6 @@ name = "optersoft-make"
 version = "0.1.0"
 source = { editable = "optersoft" }
 dependencies = [
-    { name = "hetzner-make" },
     { name = "mkrun" },
 ]
 
@@ -421,7 +403,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "google-auth", marker = "extra == 'play'", specifier = ">=2" },
-    { name = "hetzner-make", editable = "../hetzner/make" },
     { name = "mkrun", editable = "." },
     { name = "requests", marker = "extra == 'play'", specifier = ">=2" },
 ]
