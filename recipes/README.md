@@ -3,9 +3,13 @@
 optersoft's shared recipes for [`mkrun`](https://github.com/optersoft/make) —
 the successor to `github.com/optersoft/just`.
 
-**Private.** The runner itself is public and generic; this repository is the
+**Internal.** `mkrun` is generic and meant to be published; this directory is the
 operational half: box account conventions, the Play release pipeline, deploy
-hosts, per-app dev ports, and the unattended-agent boundary.
+hosts, per-app dev ports, and the unattended-agent boundary. It is a **separate
+distribution** built from this subdirectory and never part of what `mkrun` ships
+— see the sdist rule in the root `pyproject.toml`. ⚠️ It is not separately
+*private* any more: it is only as private as `optersoft/make` itself, so
+publishing that repository publishes this directory with it.
 
 ```python
 # Makefile.py in a consuming repo
@@ -13,7 +17,7 @@ hosts, per-app dev ports, and the unattended-agent boundary.
 # requires-python = ">=3.11"
 # dependencies = [
 #   "mkrun>=0.1",
-#   "make-recipes-optersoft @ git+ssh://git@github.com/optersoft/make-recipes.git",
+#   "make-recipes-optersoft @ git+ssh://git@github.com/optersoft/make.git#subdirectory=recipes",
 # ]
 # ///
 from make_recipes_optersoft import box, web
@@ -43,8 +47,8 @@ Importing a group is what registers it; nothing is registered implicitly.
 
 Ready-to-drop-in consumer files for broker, drive, alma, code and academy are in
 `examples/`. The rollout order and the `just` → `make` translation table are in
-`docs/migration.md`. The evidence for why this move happened at all is public,
-in the runner's own repository: https://github.com/optersoft/make/blob/main/docs/why.md
+`docs/migration.md`. The evidence for why this move happened at all is one level
+up, in [`../docs/why.md`](../docs/why.md).
 
 ## Things that deliberately did not change
 
@@ -60,8 +64,13 @@ in the runner's own repository: https://github.com/optersoft/make/blob/main/docs
 
 ## Development
 
+This is a uv workspace member, so work from the repository root — one lockfile
+covers both halves, and `mkrun` resolves out of the working tree rather than
+PyPI:
+
 ```bash
-uv sync
-uv run pytest
-uv run ruff check src tests && uv run ruff format --check src tests
+cd ..
+make dev.sync            # uv sync --all-extras --all-packages
+make dev.check           # lint + the whole suite, both members
+make dev.test recipes/tests    # just this package
 ```

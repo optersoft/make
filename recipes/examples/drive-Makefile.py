@@ -10,7 +10,7 @@ collide with anything.
 # requires-python = ">=3.11"
 # dependencies = [
 #   "mkrun>=0.1",
-#   "make-recipes-optersoft @ git+ssh://git@github.com/optersoft/make-recipes.git",
+#   "make-recipes-optersoft @ git+ssh://git@github.com/optersoft/make.git#subdirectory=recipes",
 # ]
 # ///
 #
@@ -22,7 +22,6 @@ collide with anything.
 from __future__ import annotations
 
 from make import recipe, sh
-
 from make_recipes_optersoft import android, box, database, play  # noqa: F401 -- importing registers
 
 android.Android.configure(module="drive-android", pkg="com.optersoft.drive")

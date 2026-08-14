@@ -20,7 +20,15 @@ build-backend = "hatchling.build"
 packages = ["src/make_recipes_optersoft"]
 
 [project.urls]
-Source = "https://github.com/optersoft/make-recipes"
+Source = "https://github.com/optersoft/make/tree/main/recipes"
+
+# The runner is the other half of this repository, so resolve it from the
+# working tree instead of PyPI: a change to `mkrun` is testable against real
+# recipes in the same commit that makes it. Consumers are unaffected -- a built
+# wheel carries the plain `mkrun>=0.1` requirement above, because
+# `tool.uv.sources` is workspace metadata and is not written into a distribution.
+[tool.uv.sources]
+mkrun = { workspace = true }
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]
@@ -29,16 +37,7 @@ dev = ["pytest>=8", "ruff>=0.6"]
 testpaths = ["tests"]
 addopts = "-q"
 
-[tool.ruff]
-line-length = 110
-target-version = "py311"
-
-[tool.ruff.format]
-skip-magic-trailing-comma = true
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
-ignore = ["E501", "B008", "RUF012", "SIM117", "RUF022"]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/**" = ["F811", "B006"]
+# No [tool.ruff] here on purpose. Ruff walks up from each file to the nearest
+# config, so both members share the root one -- which is how it should have been
+# from the start: the two copies had already drifted apart by an isort option,
+# and ruff warned about the half that was missing it.

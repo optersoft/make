@@ -17,7 +17,7 @@ Here it is a filtered dictionary, which cannot accidentally evaluate anything.
 # requires-python = ">=3.11"
 # dependencies = [
 #   "mkrun>=0.1",
-#   "make-recipes-optersoft @ git+ssh://git@github.com/optersoft/make-recipes.git",
+#   "make-recipes-optersoft @ git+ssh://git@github.com/optersoft/make.git#subdirectory=recipes",
 # ]
 # ///
 #
@@ -29,7 +29,6 @@ Here it is a filtered dictionary, which cannot accidentally evaluate anything.
 from __future__ import annotations
 
 from make import env, recipe
-
 from make_recipes_optersoft import box, database, web  # noqa: F401 -- importing registers
 
 web.Web.configure(

@@ -46,13 +46,23 @@ packages = ["src/make"]
 [tool.hatch.build.targets.sdist]
 only-include = ["src/make", "tests", "README.md", "LICENSE", "pyproject.toml"]
 
+# Two distributions, one checkout: `mkrun` here at the root, and optersoft's
+# private recipe package in recipes/. They are packaged separately -- see the
+# sdist rule above -- but resolved and locked together, so a runner change and
+# the recipes that exercise it land in one commit and one lockfile.
+[tool.uv.workspace]
+members = ["recipes"]
+
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "recipes/tests"]
 addopts = "-q"
 
 [tool.ruff]
 line-length = 110
 target-version = "py311"
+# Both workspace members are first-party. Without recipes/src here, ruff sorts
+# `make_recipes_optersoft` as a third-party import inside its own package.
+src = ["src", "recipes/src"]
 
 [tool.ruff.lint.isort]
 # Paired with format.skip-magic-trailing-comma below; ruff warns if they disagree.
@@ -77,4 +87,7 @@ ignore = ["E501", "B008", "RUF012", "SIM117", "RUF022"]
 
 [tool.ruff.lint.per-file-ignores]
 # Tests deliberately redefine names to exercise duplicate-registration errors.
+# Both members' suites: patterns are matched against the path relative to this
+# file, so `tests/**` alone would not reach the recipes package.
 "tests/**" = ["F811", "B006"]
+"recipes/tests/**" = ["F811", "B006"]

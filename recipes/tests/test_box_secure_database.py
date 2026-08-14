@@ -6,9 +6,9 @@ import contextlib
 from pathlib import Path
 
 import pytest
+
 from make.errors import MakeError, ToolMissing
 from make.testing import context, record
-
 from make_recipes_optersoft import box, database, secure
 from make_recipes_optersoft.box import Box
 

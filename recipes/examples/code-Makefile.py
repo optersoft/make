@@ -10,7 +10,7 @@ recipes could fail for the wrong reason.
 # requires-python = ">=3.11"
 # dependencies = [
 #   "mkrun>=0.1",
-#   "make-recipes-optersoft @ git+ssh://git@github.com/optersoft/make-recipes.git",
+#   "make-recipes-optersoft @ git+ssh://git@github.com/optersoft/make.git#subdirectory=recipes",
 # ]
 # ///
 #
@@ -22,7 +22,6 @@ recipes could fail for the wrong reason.
 from __future__ import annotations
 
 from make import recipe, sh
-
 from make_recipes_optersoft import agent, web
 
 agent.Agent.configure(gate="cargo check --workspace --features server")

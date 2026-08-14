@@ -301,6 +301,14 @@ Recipe files, searched from the current directory upward: `Makefile.py`,
 `makefile.py`, `mk.py`, `.make/main.py`. Not `make.py` — that name can shadow
 `import make`.
 
+## Repository layout
+
+`src/` is this tool. `recipes/` is a second, separate distribution —
+`make-recipes-optersoft`, the author's own fleet recipes — kept here as a uv
+workspace member so a change to the runner is tested against real recipes in the
+same commit. It is excluded from the `mkrun` sdist and wheel; installing this
+tool never installs it.
+
 ## Status
 
 Alpha. The recipe-authoring API — `@recipe`, `sh`, `fs`, `config`, `env` — is

@@ -10,7 +10,7 @@ file's hook that a consumer replaces.
 # requires-python = ">=3.11"
 # dependencies = [
 #   "mkrun>=0.1",
-#   "make-recipes-optersoft @ git+ssh://git@github.com/optersoft/make-recipes.git",
+#   "make-recipes-optersoft @ git+ssh://git@github.com/optersoft/make.git#subdirectory=recipes",
 # ]
 # ///
 #
@@ -22,7 +22,6 @@ file's hook that a consumer replaces.
 from __future__ import annotations
 
 from make import env, recipe, sh, step
-
 from make_recipes_optersoft import box, database, web  # noqa: F401 -- importing registers
 
 web.Web.configure(

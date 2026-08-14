@@ -8,6 +8,7 @@ whichever test file happened to import first.
 from __future__ import annotations
 
 import pytest
+
 from make import config
 from make.recipes import registry
 

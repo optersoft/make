@@ -9,19 +9,27 @@ from pathlib import Path
 
 from make import note, recipe, sh, step, warn
 
-SOURCES = ["src", "tests", "Makefile.py"]
+# Both workspace members, listed as Python paths rather than as `recipes/`.
+# Ruff formats Python code blocks inside markdown too, and the whole directory
+# hands it docs/ -- where the examples are hand-packed to read as prose and
+# reformatting them is a docs edit disguised as a lint fix.
+SOURCES = ["src", "tests", "Makefile.py", "recipes/src", "recipes/tests", "recipes/examples"]
 
 
 @recipe(group="dev", requires=["uv"])
 def sync() -> None:
-    """Install the project in editable mode.
+    """Install both workspace members in editable mode.
+
+    `--all-packages` is what reaches recipes/; a plain `uv sync` installs the
+    root project only, and then recipes/tests fail on import rather than on
+    anything real.
 
     Also removes a stray `make` distribution. The import name is `make` but the
     distribution is `mkrun`, so an environment carrying both -- easy to end up
     with after the rename, or by installing the unrelated PyPI `make` -- makes
     dependency checks pass locally that fail everywhere else. One did.
     """
-    sh("uv", "sync", "--all-extras")
+    sh("uv", "sync", "--all-extras", "--all-packages")
     if _installed("make"):
         warn("removing a stray `make` distribution; this project's is `mkrun`")
         sh("uv", "pip", "uninstall", "make")

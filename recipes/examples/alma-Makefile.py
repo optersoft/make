@@ -12,7 +12,7 @@ session with `make web.start -- --debug-symbols=true`.
 # requires-python = ">=3.11"
 # dependencies = [
 #   "mkrun>=0.1",
-#   "make-recipes-optersoft @ git+ssh://git@github.com/optersoft/make-recipes.git",
+#   "make-recipes-optersoft @ git+ssh://git@github.com/optersoft/make.git#subdirectory=recipes",
 # ]
 # ///
 #
@@ -24,7 +24,6 @@ session with `make web.start -- --debug-symbols=true`.
 from __future__ import annotations
 
 from make import recipe, sh
-
 from make_recipes_optersoft import android, box, database, play, web  # noqa: F401
 
 # Deploy target and smoke host. Real values belong in ~/.make/alma.env, not in a

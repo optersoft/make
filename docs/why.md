@@ -7,8 +7,9 @@ lines, consumed by five repositories — and what its git history records.
 Nothing below is hypothetical. Each item is either a rule that repository's own
 contributor guide states as deliberate design, or a `fix(...)` / `revert(...)`
 commit. The repositories quoted are private, so the excerpts are reproduced
-here rather than linked; the recipes themselves now live in a private
-`make-recipes-optersoft` package, which is exactly the point — **the runner is
+here rather than linked; the recipes themselves are a separate
+`make-recipes-optersoft` package, built from this repository's `recipes/` and
+never shipped as part of `mkrun`, which is exactly the point — **the runner is
 generic, and a fleet's recipes are just its first consumer.**
 
 ---
