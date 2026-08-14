@@ -1,7 +1,7 @@
 [project]
 name = "mkrun"
 version = "0.2.0"
-description = "A command runner whose recipes are Python -- shareable as versioned packages."
+description = "A command runner whose tasks are Python functions -- shareable as versioned packages."
 readme = "README.md"
 requires-python = ">=3.11"
 # Dual, at the user's choice -- the convention in this corner of the ecosystem
@@ -17,7 +17,7 @@ requires-python = ">=3.11"
 license = "MIT OR Apache-2.0"
 license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
 authors = [{ name = "Optersoft, S.L.", email = "david@optersoft.com" }]
-keywords = ["task runner", "command runner", "just", "make", "recipes", "uv"]
+keywords = ["task runner", "command runner", "just", "make", "mk", "uv"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
