@@ -1,6 +1,6 @@
 """Filesystem changes that honour `--dry-run`.
 
-`sh()` is only half of what a recipe does. The other half is writing a generated
+`sh()` is only half of what a task does. The other half is writing a generated
 file, wiping a build tree, copying a listing into place -- and a `--dry-run` that
 suppresses every command while still mutating the working directory is worse
 than none, because it looks safe.
@@ -9,7 +9,7 @@ That is not hypothetical: the first end-to-end dry run of `web.start` rewrote a
 repo's generated `tailwind-sources.css` from a `cargo metadata` call that had
 itself been skipped, producing an empty file where a correct one had been.
 
-Use these instead of `pathlib` and `shutil` wherever a recipe changes something:
+Use these instead of `pathlib` and `shutil` wherever a task changes something:
 
     fs.write(path, text)
     fs.mkdir(path)

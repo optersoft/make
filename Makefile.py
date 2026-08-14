@@ -1,4 +1,4 @@
-"""Recipes for developing `make` itself -- and the first thing that dogfoods it.
+"""Tasks for developing `make` itself -- and the first thing that dogfoods it.
 
 Run `make` with no arguments to see them.
 """
@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from make import note, recipe, sh, step, warn
+from make import note, sh, step, task, warn
 
 # Both workspace members, listed as Python paths rather than as `optersoft/`.
 # Ruff formats Python code blocks inside markdown too, and the whole directory
@@ -16,7 +16,7 @@ from make import note, recipe, sh, step, warn
 SOURCES = ["src", "tests", "Makefile.py", "optersoft/src", "optersoft/tests", "optersoft/examples"]
 
 
-@recipe(group="dev", requires=["uv"])
+@task(group="dev", requires=["uv"])
 def sync() -> None:
     """Install both workspace members in editable mode.
 
@@ -45,7 +45,7 @@ def _installed(distribution: str) -> bool:
     return True
 
 
-@recipe(group="dev", requires=["uv"])
+@task(group="dev", requires=["uv"])
 def test(*paths: str, verbose: bool = False) -> None:
     """Run the test suite.
 
@@ -55,7 +55,7 @@ def test(*paths: str, verbose: bool = False) -> None:
     sh("uv", "run", "pytest", *(paths or ()), *(["-v"] if verbose else []))
 
 
-@recipe(group="dev", requires=["uv"])
+@task(group="dev", requires=["uv"])
 def lint(*, fix: bool = False) -> None:
     """Check formatting and lint rules.
 
@@ -66,13 +66,13 @@ def lint(*, fix: bool = False) -> None:
     sh("uv", "run", "ruff", "format", *([] if fix else ["--check"]), *SOURCES)
 
 
-@recipe(group="dev", needs=[lint, test])
+@task(group="dev", needs=[lint, test])
 def check() -> None:
     """Everything CI runs."""
     note("lint and tests passed")
 
 
-@recipe(group="dev")
+@task(group="dev")
 def bench() -> None:
     """Measure startup latency -- the number that decides whether this gets used."""
     import statistics
@@ -97,13 +97,13 @@ def bench() -> None:
         warn("over budget -- check for a heavy import at module scope")
 
 
-@recipe(group="dist", requires=["uv"])
+@task(group="dist", requires=["uv"])
 def build() -> None:
     """Build the wheel and sdist."""
     sh("uv", "build")
 
 
-@recipe(group="dist", needs=[check], requires=["git"], dangerous=True)
+@task(group="dist", needs=[check], requires=["git"], dangerous=True)
 def release(version: str) -> None:
     """Tag a release, which publishes to PyPI from CI.
 
@@ -117,7 +117,7 @@ def release(version: str) -> None:
     note(f"tagged v{version} -- watch the release workflow for the upload")
 
 
-@recipe(group="dev")
+@task(group="dev")
 def completions(shell: str = "zsh") -> None:
     """Print the completion script for a shell (bash, zsh, fish)."""
     from make.completions import emit

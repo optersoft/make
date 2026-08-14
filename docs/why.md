@@ -7,7 +7,7 @@ lines, consumed by five repositories — and what its git history records.
 Nothing below is hypothetical. Each item is either a rule that repository's own
 contributor guide states as deliberate design, or a `fix(...)` / `revert(...)`
 commit. The repositories quoted are private, so the excerpts are reproduced
-here rather than linked; the recipes themselves are a separate
+here rather than linked; the tasks themselves are a separate
 `optersoft-make` package, built from this repository's `optersoft/` and
 never shipped as part of `mkrun`, which is exactly the point — **the runner is
 generic, and a fleet's recipes are just its first consumer.**
@@ -54,11 +54,11 @@ set it in any one of:
 > must define it; `just` errors on duplicate recipes across imports, so a shared
 > no-op default could never be overridden.
 
-An entire recipe is left out of the library so that its absence forces the
+An entire task is left out of the library so that its absence forces the
 consumer to act. `make` has both halves:
 
 ```python
-@play.recipe(name="test-gate", abstract=True)
+@play.task(name="test-gate", abstract=True)
 def test_gate() -> None:
     """Verification every release must pass. Each consumer defines this."""
 ```
@@ -72,15 +72,15 @@ upstream renamed it — is itself an error.
 > A `set` in an imported file applies to the whole importing justfile, and a
 > setting declared in both is a fatal parse error — there is no
 > `allow-duplicate-settings`. It also means a malformed `./.env` fails *every*
-> recipe in the consuming repo.
+> task in the consuming repo.
 
 One shared file owning `set dotenv-load` constrains every consumer that imports
 it, forever. In `make` there is no global setting to collide over: reading an
-env file is a function call inside the recipe that wants it.
+env file is a function call inside the task that wants it.
 
 ## 4. Sharing has no versions, no pinning, and fails silently
 
-The distribution mechanism is a recipe copy-pasted into every consumer:
+The distribution mechanism is a task copy-pasted into every consumer:
 
 ```make
 _shared:
@@ -98,7 +98,7 @@ what version a given checkout is on.
 ```python
 # make
 # /// script
-# dependencies = ["mkrun>=0.1", "optersoft-make>=0.4"]
+# dependencies = ["mkrun>=0.2", "optersoft-make>=0.4"]
 # ///
 ```
 
@@ -118,7 +118,7 @@ env.layered()   # ~/.make/secrets.env -> ~/.make/<repo>.env -> ./.env
 
 ## 6. The logic already left `just`
 
-> **Logic tiering.** Recipe bodies stay thin bash glue over one CLI call.
+> **Logic tiering.** Task bodies stay thin bash glue over one CLI call.
 > Anything heavier gets promoted: real programs land in `play/` as standalone
 > scripts; domain logic lands in a Rust crate.
 
@@ -187,8 +187,8 @@ Honesty is worth more than a clean sweep:
   imperceptible, but `just` is genuinely faster, and staying under a 150 ms
   budget is an explicit, tested constraint here rather than a free property.
 - **One binary, no runtime.** `just` is a single Rust binary. `mkrun` needs
-  Python, and shared recipe packages need `uv`.
-- **Bash is right for one-liners.** A recipe that is genuinely `cargo test` is
+  Python, and shared task packages need `uv`.
+- **Bash is right for one-liners.** A task that is genuinely `cargo test` is
   shorter in a justfile. `sh.bash(...)` exists so such a body can move across
   verbatim and stay that way.
 

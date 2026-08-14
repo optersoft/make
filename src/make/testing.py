@@ -1,4 +1,4 @@
-"""Testing recipes.
+"""Testing tasks.
 
 The single largest thing `just` cannot offer. A 499-line `web.just` holds port
 arithmetic, two differently-scoped process reaps and a four-layer environment
@@ -6,10 +6,10 @@ precedence chain, and the only available check is `just --fmt --check` -- which
 verifies that it parses. Every bug that file has shipped was in the logic, not
 the syntax.
 
-Because a recipe here is a function, the same logic is testable directly:
+Because a task here is a function, the same logic is testable directly:
 
     from make.testing import record
-    from acme_recipes import web
+    from acme_tasks import web
 
     def test_start_reaps_a_stale_lock_holder():
         with record(responses={"lsof -t": "4711"}) as rec:
@@ -41,7 +41,7 @@ __all__ = ["Recorder", "context", "record", "run_cli"]
 
 @dataclass
 class Recorder:
-    """Every command a recipe attempted, without running any of them."""
+    """Every command a task attempted, without running any of them."""
 
     commands: list[list[str]] = field(default_factory=list)
     responses: dict[str, str] = field(default_factory=dict)
@@ -186,11 +186,11 @@ def context(root: str | Path | None = None, **overrides: Any) -> Iterator[Contex
         yield active
 
 
-def run_cli(args: Sequence[str], *, recipe_file: str | Path | None = None) -> int:
+def run_cli(args: Sequence[str], *, task_file: str | Path | None = None) -> int:
     """Invoke the command line in-process, for end-to-end tests."""
     from .cli import main
 
     argv = list(args)
-    if recipe_file:
-        argv = ["--file", str(recipe_file), *argv]
+    if task_file:
+        argv = ["--file", str(task_file), *argv]
     return main(argv)

@@ -1,10 +1,10 @@
-"""Executing recipes: prerequisites, gates, staleness, parallelism.
+"""Executing tasks: prerequisites, gates, staleness, parallelism.
 
 Everything here is deliberately outside the decorator, so that importing a
-recipe and calling it from Python stays plain function application. `needs=`,
+task and calling it from Python stays plain function application. `needs=`,
 `requires=`, the confirmation gate and staleness skipping are properties of
-*running* a recipe from the command line, not of the function itself -- which is
-what makes recipes testable without a harness.
+*running* a task from the command line, not of the function itself -- which is
+what makes tasks testable without a harness.
 """
 
 from __future__ import annotations
@@ -20,10 +20,10 @@ from pathlib import Path
 from typing import Any
 
 from .context import confirm, current, debug, note
-from .errors import Aborted, RecipeError
-from .recipes import Recipe, normalize
-from .recipes import registry as default_registry
+from .errors import Aborted, TaskError
 from .sh import sh
+from .tasks import Task, normalize
+from .tasks import registry as default_registry
 
 __all__ = ["Invocation", "run", "run_one"]
 
@@ -32,9 +32,9 @@ _memo_lock = threading.Lock()
 
 @dataclass
 class Invocation:
-    """One recipe plus the arguments it was called with."""
+    """One task plus the arguments it was called with."""
 
-    recipe: Recipe
+    task: Task
     args: list[Any] = field(default_factory=list)
     kwargs: dict[str, Any] = field(default_factory=dict)
 
@@ -58,10 +58,10 @@ def _expand(patterns: Sequence[str], root: Path) -> list[Path]:
     return found
 
 
-def is_up_to_date(item: Recipe) -> bool:
+def is_up_to_date(item: Task) -> bool:
     """True when every declared output is newer than every declared input.
 
-    Opt-in and deliberately shallow: this is not a build system, and a recipe
+    Opt-in and deliberately shallow: this is not a build system, and a task
     without `inputs=`/`outputs=` always runs. It exists so that expensive,
     obviously-cacheable steps (compiling a stylesheet, rendering a diagram) stop
     costing a second every time something else in the chain needs them.
@@ -88,12 +88,12 @@ def is_up_to_date(item: Recipe) -> bool:
 # --------------------------------------------------------------------------
 
 
-def _check_tools(item: Recipe) -> None:
+def _check_tools(item: Task) -> None:
     if item.requires:
-        sh.require(*item.requires, hint=f"required by recipe {item.full_name}")
+        sh.require(*item.requires, hint=f"required by task {item.full_name}")
 
 
-def _check_dangerous(item: Recipe) -> None:
+def _check_dangerous(item: Task) -> None:
     if not item.dangerous:
         return
     context = current()
@@ -106,13 +106,13 @@ def _check_dangerous(item: Recipe) -> None:
         )
 
 
-def _check_abstract(item: Recipe) -> None:
+def _check_abstract(item: Task) -> None:
     if not item.abstract:
         return
-    raise RecipeError(
+    raise TaskError(
         f"{item.full_name} is declared but not implemented",
-        hint=f"define it in your recipe file:\n"
-        f"    @recipe(override={item.full_name!r})\n"
+        hint=f"define it in your task file:\n"
+        f"    @task(override={item.full_name!r})\n"
         f"    def {item.name.replace('-', '_')}(...):\n"
         f"        ...",
     )
@@ -123,8 +123,8 @@ def _check_abstract(item: Recipe) -> None:
 # --------------------------------------------------------------------------
 
 
-def run_one(item: Recipe, args: Sequence[Any] = (), kwargs: dict[str, Any] | None = None) -> Any:
-    """Run a single recipe with its gates, prerequisites and staleness check."""
+def run_one(item: Task, args: Sequence[Any] = (), kwargs: dict[str, Any] | None = None) -> Any:
+    """Run a single task with its gates, prerequisites and staleness check."""
     context = current()
     key = normalize(item.full_name)
 
@@ -170,7 +170,7 @@ def run_one(item: Recipe, args: Sequence[Any] = (), kwargs: dict[str, Any] | Non
 _running: contextvars.ContextVar[tuple[str, ...]] = contextvars.ContextVar("make_stack", default=())
 
 
-def _run_needs(item: Recipe) -> None:
+def _run_needs(item: Task) -> None:
     names = item.resolved_needs()
     if not names:
         return
@@ -178,14 +178,14 @@ def _run_needs(item: Recipe) -> None:
     stack = _running.get()
     if item.full_name in stack:
         chain = " -> ".join([*stack, item.full_name])
-        raise RecipeError(f"circular needs=: {chain}")
+        raise TaskError(f"circular needs=: {chain}")
     token = _running.set((*stack, item.full_name))
     try:
         context = current()
         pending = [name for name in names if normalize(name) not in context._memo]
         if not pending:
             return
-        # A keep_cwd recipe chdirs the whole process, so it can never share a
+        # A keep_cwd task chdirs the whole process, so it can never share a
         # wave with anything else. Everything else runs at ctx.root already.
         concurrent = [n for n in pending if not default_registry.require(n).keep_cwd]
         serial = [n for n in pending if n not in concurrent]
@@ -231,10 +231,10 @@ def _run_parallel(names: Sequence[str]) -> None:
 
 
 def invoke(name: str, *args: Any, **kwargs: Any) -> Any:
-    """Run a recipe by name, honouring whatever override is in force.
+    """Run a task by name, honouring whatever override is in force.
 
     Calling an imported function directly runs *that* function -- which is
-    usually what you want, and is why recipes stay plain functions. But a hook a
+    usually what you want, and is why tasks stay plain functions. But a hook a
     consumer is expected to replace (`web.preflight`, `play.test-gate`) has to
     be dispatched through the registry, or the shared package would keep calling
     its own default and silently ignore the override.
@@ -246,5 +246,5 @@ def run(invocations: Iterable[Invocation]) -> Any:
     """Run each invocation in the order the user gave them."""
     result: Any = None
     for invocation in invocations:
-        result = run_one(invocation.recipe, invocation.args, invocation.kwargs)
+        result = run_one(invocation.task, invocation.args, invocation.kwargs)
     return result

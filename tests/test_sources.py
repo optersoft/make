@@ -1,9 +1,9 @@
-"""Recipe packages consumed from the repository that owns them.
+"""Task packages consumed from the repository that owns them.
 
 A group like `box` belongs in `hetzner/`, beside the CLI it wraps. Getting it
 from there means the same two forms the Rust crates here already use: a path to
 a checkout sitting beside this one, or a git URL. Both are declared in the
-recipe file's `[tool.uv.sources]`.
+task file's `[tool.uv.sources]`.
 
 That table is only read by `uv sync --script`. `uv run --with`, which is how
 this tool used to install dependencies, never opens the file -- so a source was
@@ -13,6 +13,14 @@ exist purely to keep that from coming back.
 The two end-to-end tests really do run uv and really do build wheels. The git
 one uses a local bare repository over `file://`, so nothing here reaches the
 network -- except, on a cold cache, to fetch the build backend.
+
+⚠️ `mkrun` is sourced here with `editable = true`, and has to be. A plain
+`{ path = ... }` is built once and cached by (path, version); uv does not stat
+the tree on every run, so editing this checkout without bumping the version
+serves the *previous* build forever. That is not a test artifact -- a consumer
+hand-writing a non-editable path source to a sibling gets the same staleness.
+`mk --sync --add --path` writes `--editable` for this reason, and so does the
+`.make/sources.toml` override shim.
 """
 
 from __future__ import annotations
@@ -40,12 +48,12 @@ from_checkout = pytest.mark.skipif(
 
 
 def build_package(root: Path, marker: str) -> Path:
-    """A minimal recipe package whose one recipe reports where it came from."""
+    """A minimal task package whose one task reports where it came from."""
     write(
         root / "pyproject.toml",
         """
 [project]
-name = "fixture-recipes"
+name = "fixture-tasks"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = []
@@ -55,16 +63,16 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/fixture_recipes"]
+packages = ["src/fixture_tasks"]
 """,
     )
     write(
-        root / "src/fixture_recipes/__init__.py",
+        root / "src/fixture_tasks/__init__.py",
         f'''
-from make import recipe
+from make import task
 
 
-@recipe(group="fixture")
+@task(group="fixture")
 def hello() -> None:
     """Report which copy of this package is installed."""
     print("fixture came from {marker}")
@@ -74,19 +82,19 @@ def hello() -> None:
 
 
 def consumer(project: Path, sources: dict[str, str]) -> Path:
-    """A recipe file depending on the fixture, with the given sources table."""
+    """A task file depending on the fixture, with the given sources table."""
     table = "\n".join(f"# {name} = {spec}" for name, spec in sources.items())
     return write(
         project / "Makefile.py",
         f"""
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["mkrun", "fixture-recipes"]
+# dependencies = ["mkrun", "fixture-tasks"]
 #
 # [tool.uv.sources]
 {table}
 # ///
-from fixture_recipes import hello  # noqa: F401 -- importing registers
+from fixture_tasks import hello  # noqa: F401 -- importing registers
 """,
     )
 
@@ -111,12 +119,15 @@ def run_make(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 @needs_uv
 @from_checkout
-def test_a_recipe_package_resolves_from_a_path(project: Path):
-    """The sibling-checkout form: `{ path = "../hetzner/recipes" }`."""
+def test_a_task_package_resolves_from_a_path(project: Path):
+    """The sibling-checkout form: `{ path = "../hetzner/tasks" }`."""
     build_package(project / "provider", marker="the path")
     consumer(
         project,
-        {"mkrun": f'{{ path = "{MAKE_ROOT}" }}', "fixture-recipes": f'{{ path = "{project / "provider"}" }}'},
+        {
+            "mkrun": f'{{ path = "{MAKE_ROOT}", editable = true }}',
+            "fixture-tasks": f'{{ path = "{project / "provider"}" }}',
+        },
     )
 
     result = run_make(project, "fixture.hello")
@@ -126,7 +137,7 @@ def test_a_recipe_package_resolves_from_a_path(project: Path):
 
 @needs_uv
 @from_checkout
-def test_a_recipe_package_resolves_from_git(project: Path):
+def test_a_task_package_resolves_from_git(project: Path):
     """The portable form. A local bare repo over file://, so this stays offline."""
     source = build_package(project / "provider", marker="git")
     bare = project / "provider.git"
@@ -141,7 +152,11 @@ def test_a_recipe_package_resolves_from_git(project: Path):
         subprocess.run(command, cwd=source, check=True, capture_output=True)
 
     consumer(
-        project, {"mkrun": f'{{ path = "{MAKE_ROOT}" }}', "fixture-recipes": f'{{ git = "file://{bare}" }}'}
+        project,
+        {
+            "mkrun": f'{{ path = "{MAKE_ROOT}", editable = true }}',
+            "fixture-tasks": f'{{ git = "file://{bare}" }}',
+        },
     )
 
     result = run_make(project, "fixture.hello")
@@ -159,9 +174,12 @@ def test_an_override_redirects_a_package_to_a_local_checkout(project: Path, monk
     # pass can only mean the override was honoured.
     consumer(
         project,
-        {"mkrun": f'{{ path = "{MAKE_ROOT}" }}', "fixture-recipes": '{ git = "file:///nowhere/absent.git" }'},
+        {
+            "mkrun": f'{{ path = "{MAKE_ROOT}", editable = true }}',
+            "fixture-tasks": '{ git = "file:///nowhere/absent.git" }',
+        },
     )
-    write(project / ".make/sources.toml", '[sources]\nfixture-recipes = { path = "provider" }\n')
+    write(project / ".make/sources.toml", '[sources]\nfixture-tasks = { path = "provider" }\n')
 
     result = run_make(project, "fixture.hello")
     assert result.returncode == 0, result.stdout + result.stderr
@@ -179,25 +197,25 @@ def test_the_repo_override_beats_the_home_one(project: Path, monkeypatch):
     monkeypatch.setattr(env_module, "CONFIG_DIRS", (project / "home", project / "nonexistent"))
     (project / "from-home").mkdir()
     (project / "from-repo").mkdir()
-    write(project / "home/sources.toml", '[sources]\nfixture-recipes = { path = "from-home" }\n')
-    write(project / ".make/sources.toml", '[sources]\nfixture-recipes = { path = "from-repo" }\n')
+    write(project / "home/sources.toml", '[sources]\nfixture-tasks = { path = "from-home" }\n')
+    write(project / ".make/sources.toml", '[sources]\nfixture-tasks = { path = "from-repo" }\n')
 
     overrides = read_overrides(project)
-    assert overrides["fixture-recipes"]["path"] == str(project / "from-repo")
+    assert overrides["fixture-tasks"]["path"] == str(project / "from-repo")
 
 
 def test_a_relative_override_resolves_against_the_repo_not_the_file(project: Path, monkeypatch):
     """So one line in ~/.make/sources.toml is right from every sibling checkout."""
     monkeypatch.setattr(env_module, "CONFIG_DIRS", (project / "home", project / "nonexistent"))
     (project / "sibling").mkdir()
-    write(project / "home/sources.toml", '[sources]\nfixture-recipes = { path = "sibling" }\n')
+    write(project / "home/sources.toml", '[sources]\nfixture-tasks = { path = "sibling" }\n')
 
-    assert read_overrides(project)["fixture-recipes"]["path"] == str(project / "sibling")
+    assert read_overrides(project)["fixture-tasks"]["path"] == str(project / "sibling")
 
 
 def test_an_override_pointing_nowhere_says_so(project: Path, monkeypatch):
     monkeypatch.setattr(env_module, "CONFIG_DIRS", (project / "home", project / "nonexistent"))
-    write(project / ".make/sources.toml", '[sources]\nfixture-recipes = { path = "gone" }\n')
+    write(project / ".make/sources.toml", '[sources]\nfixture-tasks = { path = "gone" }\n')
 
     with pytest.raises(MakeError, match="not a directory"):
         read_overrides(project)
@@ -205,7 +223,7 @@ def test_an_override_pointing_nowhere_says_so(project: Path, monkeypatch):
 
 def test_an_override_without_a_path_says_what_it_wanted(project: Path, monkeypatch):
     monkeypatch.setattr(env_module, "CONFIG_DIRS", (project / "home", project / "nonexistent"))
-    write(project / ".make/sources.toml", '[sources]\nfixture-recipes = "provider"\n')
+    write(project / ".make/sources.toml", '[sources]\nfixture-tasks = "provider"\n')
 
     with pytest.raises(MakeError, match="must be a table with a `path`"):
         read_overrides(project)
@@ -214,16 +232,16 @@ def test_an_override_without_a_path_says_what_it_wanted(project: Path, monkeypat
 def test_the_shim_carries_the_rewritten_sources(project: Path, monkeypatch):
     monkeypatch.setattr(env_module, "CONFIG_DIRS", (project / "home", project / "nonexistent"))
     (project / "provider").mkdir()
-    recipe_file = consumer(project, {"fixture-recipes": '{ git = "file:///nowhere.git" }'})
-    write(project / ".make/sources.toml", '[sources]\nfixture-recipes = { path = "provider" }\n')
+    task_file = consumer(project, {"fixture-tasks": '{ git = "file:///nowhere.git" }'})
+    write(project / ".make/sources.toml", '[sources]\nfixture-tasks = { path = "provider" }\n')
 
-    shim = write_shim(recipe_file, read_metadata(recipe_file), read_overrides(project))
+    shim = write_shim(task_file, read_metadata(task_file), read_overrides(project))
     text = shim.read_text()
 
     assert shim == project / ".make/bootstrap.py"
-    assert f'fixture-recipes = {{ path = "{project / "provider"}", editable = true }}' in text
+    assert f'fixture-tasks = {{ path = "{project / "provider"}", editable = true }}' in text
     assert "nowhere.git" not in text, "the overridden source must not survive"
-    assert '"fixture-recipes"' in text, "the dependency list is carried over verbatim"
+    assert '"fixture-tasks"' in text, "the dependency list is carried over verbatim"
     assert "do not commit" in text
 
 
@@ -244,8 +262,8 @@ def test_declared_sources_never_take_the_with_path(project: Path, monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", record)
     metadata = ScriptMetadata(
-        dependencies=["fixture-recipes"],
-        raw={"tool": {"uv": {"sources": {"fixture-recipes": {"path": "../provider"}}}}},
+        dependencies=["fixture-tasks"],
+        raw={"tool": {"uv": {"sources": {"fixture-tasks": {"path": "../provider"}}}}},
     )
     reexec(metadata, ["--list"], project / "Makefile.py")
 
@@ -263,8 +281,8 @@ def test_a_source_that_cannot_be_built_fails_instead_of_falling_back(project: Pa
 
     monkeypatch.setattr(subprocess, "run", failing)
     metadata = ScriptMetadata(
-        dependencies=["fixture-recipes"],
-        raw={"tool": {"uv": {"sources": {"fixture-recipes": {"path": "../provider"}}}}},
+        dependencies=["fixture-tasks"],
+        raw={"tool": {"uv": {"sources": {"fixture-tasks": {"path": "../provider"}}}}},
     )
 
     with pytest.raises(MakeError, match="could not build the environment"):
@@ -272,12 +290,12 @@ def test_a_source_that_cannot_be_built_fails_instead_of_falling_back(project: Pa
 
 
 def test_sources_are_read_and_normalised_from_the_metadata(project: Path):
-    recipe_file = consumer(project, {"Fixture_Recipes": '{ path = "provider" }'})
+    task_file = consumer(project, {"Fixture_Tasks": '{ path = "provider" }'})
 
-    assert read_metadata(recipe_file).sources == {"fixture-recipes": {"path": "provider"}}
+    assert read_metadata(task_file).sources == {"fixture-tasks": {"path": "provider"}}
 
 
 def test_a_file_with_no_sources_reports_none(project: Path):
-    recipe_file = write(project / "Makefile.py", '# /// script\n# dependencies = ["httpx"]\n# ///\nx = 1\n')
+    task_file = write(project / "Makefile.py", '# /// script\n# dependencies = ["httpx"]\n# ///\nx = 1\n')
 
-    assert read_metadata(recipe_file).sources == {}
+    assert read_metadata(task_file).sources == {}

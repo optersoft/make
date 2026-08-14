@@ -1,12 +1,12 @@
-"""The command line: `make [global flags] <recipe> [args] [<recipe> [args] ...]`.
+"""The command line: `make [global flags] <task> [args] [<task> [args] ...]`.
 
-Global flags come before the first recipe name; everything after a recipe name
-belongs to that recipe. A second recipe name starts a new invocation only once
-the current recipe cannot accept another positional argument -- so a recipe with
+Global flags come before the first task name; everything after a task name
+belongs to that task. A second task name starts a new invocation only once
+the current task cannot accept another positional argument -- so a task with
 an optional positional, or with `*args`, keeps consuming.
 
 That rule is chosen for predictability over convenience: a value is never
-silently reinterpreted as the next recipe just because it happens to share a
+silently reinterpreted as the next task just because it happens to share a
 name with one. `mk copy a.txt web.stop` copies to a directory called
 `web.stop`, exactly as the signature says it should; to chain, fill the slots
 (`mk copy a.txt . web.stop`) or run the two commands separately.
@@ -23,32 +23,32 @@ from . import __version__
 from .context import Context, echo, error, paint, set_context, warn
 from .errors import MakeError, UsageError
 from .params import parse_args, render_usage
-from .recipes import Recipe, registry
 from .runner import Invocation, run
+from .tasks import Task, registry
 
 GLOBAL_HELP = """\
-mk -- a command runner whose recipes are Python
+mk -- a command runner whose tasks are Python
 
-usage: mk [options] <recipe> [arguments] [<recipe> [arguments] ...]
+usage: mk [options] <task> [arguments] [<task> [arguments] ...]
 
 options:
-  -l, --list             list recipes (the default with no recipe)
-  -h, --help [RECIPE]    this text, or full help for one recipe
+  -l, --list             list tasks (the default with no task)
+  -h, --help [TASK]      this text, or full help for one task
   -V, --version          print the version
   -n, --dry-run          print commands instead of running them
-  -y, --yes              pre-answer confirmations for dangerous recipes
+  -y, --yes              pre-answer confirmations for dangerous tasks
   -f, --force            ignore inputs=/outputs= staleness and run anyway
   -j, --jobs N           run independent prerequisites in parallel
   -q, --quiet            only show errors
   -v, --verbose          more detail (repeatable)
-  -C, --cwd DIR          change to DIR before looking for the recipe file
-  -F, --file PATH        use this recipe file
+  -C, --cwd DIR          change to DIR before looking for the task file
+  -F, --file PATH        use this task file
   -e, --env KEY=VALUE    set an environment variable for every command
       --json             machine-readable output (with --list)
       --doctor           check that every declared tool is installed
-      --sync             resolve and pin the recipe file's dependencies
+      --sync             resolve and pin the task file's dependencies
       --upgrade          with --sync, move the pins to the newest allowed
-      --add PKG          with --sync, add a recipe package to the recipe file
+      --add PKG          with --sync, add a task package to the task file
       --path DIR         with --add, take it from a checkout beside this one
       --git URL          with --add, take it from a repository
       --completions SH   emit a completion script (bash, zsh, fish)
@@ -56,7 +56,7 @@ options:
       --traceback        show the full traceback on an unexpected error
       --no-color         disable colour
 
-recipe files searched, from the current directory upward:
+task files searched, from the current directory upward:
   Makefile.py, makefile.py, mk.py, .make/main.py
 """
 
@@ -158,7 +158,7 @@ def _parse_global(argv: list[str]) -> tuple[_Options, list[str]]:
         elif name == "--completions":
             options.completions = value(name)
         elif name == "--names":
-            options.names = True  # bare recipe names, for shell completion
+            options.names = True  # bare task names, for shell completion
         elif name == "--no-bootstrap":
             options.bootstrap = False
         elif name == "--traceback":
@@ -169,7 +169,7 @@ def _parse_global(argv: list[str]) -> tuple[_Options, list[str]]:
             options.color = True
         else:
             raise UsageError(
-                f"unknown option {name}", hint="global options come before the recipe name; run `mk --help`"
+                f"unknown option {name}", hint="global options come before the task name; run `mk --help`"
             )
         index += 1
     return options, argv[index:]
@@ -180,8 +180,8 @@ def _parse_global(argv: list[str]) -> tuple[_Options, list[str]]:
 # --------------------------------------------------------------------------
 
 
-def _split_invocations(tokens: list[str]) -> list[tuple[Recipe, list[str]]]:
-    segments: list[tuple[Recipe, list[str]]] = []
+def _split_invocations(tokens: list[str]) -> list[tuple[Task, list[str]]]:
+    segments: list[tuple[Task, list[str]]] = []
     index = 0
     while index < len(tokens):
         name = tokens[index]
@@ -199,7 +199,7 @@ def _split_invocations(tokens: list[str]) -> list[tuple[Recipe, list[str]]]:
                 break
             if not token.startswith("-"):
                 if not greedy and filled >= positional_slots and token in registry:
-                    break  # the next recipe starts here
+                    break  # the next task starts here
                 filled += 1
             args.append(token)
             index += 1
@@ -246,7 +246,7 @@ def _print_list(*, as_json: bool) -> int:
         return 0
 
     if not items:
-        echo("no recipes defined")
+        echo("no tasks defined")
         return 0
 
     width = max(len(_signature(item)) for item in items)
@@ -267,7 +267,7 @@ def _print_list(*, as_json: bool) -> int:
     return 0
 
 
-def _signature(item: Recipe) -> str:
+def _signature(item: Task) -> str:
     parts = [item.full_name]
     for param in item.params:
         if param.kind == "positional":
@@ -277,7 +277,7 @@ def _signature(item: Recipe) -> str:
     return " ".join(parts)
 
 
-def _print_recipe_help(item: Recipe) -> int:
+def _print_task_help(item: Task) -> int:
     echo(paint(item.full_name, "bold", "cyan") + (paint("  [dangerous]", "red") if item.dangerous else ""))
     if item.summary:
         echo("  " + item.summary)
@@ -321,11 +321,11 @@ def _print_recipe_help(item: Recipe) -> int:
     return 0
 
 
-def _recipe_packages(recipe_file: Path, metadata: object) -> None:
-    """Where each declared recipe package actually came from.
+def _task_packages(task_file: Path, metadata: object) -> None:
+    """Where each declared task package actually came from.
 
-    A source is the one thing about a recipe package you cannot see by reading
-    the recipe file alone: a `.make/sources.toml` may be redirecting it to a
+    A source is the one thing about a task package you cannot see by reading
+    the task file alone: a `.make/sources.toml` may be redirecting it to a
     checkout, and two copies of `box` from different places behave differently
     while looking identical. This prints the answer rather than leaving it to be
     deduced from a failure.
@@ -333,7 +333,7 @@ def _recipe_packages(recipe_file: Path, metadata: object) -> None:
     import importlib.metadata as md
 
     from .bootstrap import _requirement_name, read_overrides
-    from .discovery import recipe_root
+    from .discovery import task_root
 
     dependencies = getattr(metadata, "dependencies", [])
     if not dependencies:
@@ -341,13 +341,13 @@ def _recipe_packages(recipe_file: Path, metadata: object) -> None:
 
     sources = getattr(metadata, "sources", {})
     try:
-        overrides = read_overrides(recipe_root(recipe_file))
+        overrides = read_overrides(task_root(task_file))
     except MakeError as exc:  # a broken override file must not hide the rest
         overrides = {}
         warn(str(exc))
 
     echo()
-    echo(paint("recipe packages", "bold"))
+    echo(paint("task packages", "bold"))
     for requirement in dependencies:
         name = _requirement_name(requirement)
         try:
@@ -370,16 +370,16 @@ def _recipe_packages(recipe_file: Path, metadata: object) -> None:
         echo(f"  {marker}{label:<28} {paint(origin, 'dim')}{suffix}")
 
 
-def _doctor(recipe_file: Path | None = None, metadata: object = None) -> int:
+def _doctor(task_file: Path | None = None, metadata: object = None) -> int:
     import shutil
 
-    echo(paint("tools declared by recipes", "bold"))
+    echo(paint("tools declared by tasks", "bold"))
     tools: dict[str, list[str]] = {}
     for item in registry.all(include_hidden=True):
         for tool in item.requires:
             tools.setdefault(tool, []).append(item.full_name)
     if not tools:
-        echo("  (no recipe declares requires=)")
+        echo("  (no task declares requires=)")
     missing = 0
     for tool in sorted(tools):
         path = shutil.which(tool)
@@ -390,8 +390,8 @@ def _doctor(recipe_file: Path | None = None, metadata: object = None) -> int:
             missing += 1
             echo(f"  {paint('MISS', 'red')}{tool:<18} {paint('needed by ' + users, 'dim')}")
 
-    if recipe_file is not None and metadata is not None:
-        _recipe_packages(recipe_file, metadata)
+    if task_file is not None and metadata is not None:
+        _task_packages(task_file, metadata)
 
     echo()
     echo(paint("environment", "bold"))
@@ -410,7 +410,7 @@ def _doctor(recipe_file: Path | None = None, metadata: object = None) -> int:
     echo()
     abstract = [i.full_name for i in registry.all(include_hidden=True) if i.abstract]
     if abstract:
-        warn("unimplemented recipes: " + ", ".join(abstract))
+        warn("unimplemented tasks: " + ", ".join(abstract))
     return 1 if missing else 0
 
 
@@ -446,21 +446,21 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         from .bootstrap import needs_bootstrap, read_metadata, reexec, sync
-        from .discovery import load_recipe_file, require_recipe_file
+        from .discovery import load_task_file, require_task_file
 
-        recipe_file = options.file.resolve() if options.file else require_recipe_file()
-        if options.file and not recipe_file.is_file():
-            raise UsageError(f"{recipe_file} does not exist")
+        task_file = options.file.resolve() if options.file else require_task_file()
+        if options.file and not task_file.is_file():
+            raise UsageError(f"{task_file} does not exist")
 
-        root = recipe_file.parent
-        if recipe_file.name == "main.py" and root.name == ".make":
+        root = task_file.parent
+        if task_file.name == "main.py" and root.name == ".make":
             root = root.parent
 
         set_context(
             Context(
                 root=root,
                 invocation_dir=invocation_dir,
-                recipe_file=recipe_file,
+                task_file=task_file,
                 dry_run=options.dry_run,
                 yes=options.yes,
                 force=options.force,
@@ -473,18 +473,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         )
 
-        metadata = read_metadata(recipe_file)
+        metadata = read_metadata(task_file)
         if options.add:
             from .bootstrap import add
 
-            return add(recipe_file, options.add, source_path=options.source_path, git=options.source_git)
+            return add(task_file, options.add, source_path=options.source_path, git=options.source_git)
         if options.sync:
-            return sync(recipe_file, metadata, upgrade=options.upgrade)
+            return sync(task_file, metadata, upgrade=options.upgrade)
         if options.bootstrap and needs_bootstrap(metadata):
-            return reexec(metadata, raw, recipe_file)
+            return reexec(metadata, raw, task_file)
 
         os.chdir(root)
-        load_recipe_file(recipe_file)
+        load_task_file(task_file)
         registry.finalize()
 
         if options.names:
@@ -494,17 +494,17 @@ def main(argv: Sequence[str] | None = None) -> int:
                     print(alias)
             return 0
         if options.doctor:
-            return _doctor(recipe_file, metadata)
+            return _doctor(task_file, metadata)
         if isinstance(options.help, str):
-            return _print_recipe_help(registry.require(options.help))
+            return _print_task_help(registry.require(options.help))
         if options.list or not tail:
             return _print_list(as_json=options.json)
 
         invocations: list[Invocation] = []
         for item, tokens in _split_invocations(tail):
             if "--help" in tokens or "-h" in tokens:
-                return _print_recipe_help(item)
-            parsed = parse_args(item.params, tokens, recipe=item.full_name)
+                return _print_task_help(item)
+            parsed = parse_args(item.params, tokens, task=item.full_name)
             invocations.append(Invocation(item, parsed.args, parsed.kwargs))
 
         run(invocations)

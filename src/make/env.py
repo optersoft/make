@@ -1,6 +1,6 @@
 """Layered environment and secrets.
 
-One implementation of a rule that `just` forces you to write once per recipe
+One implementation of a rule that `just` forces you to write once per task
 body, because its settings cannot reach `$HOME`:
 
     ~/.make/secrets.env     global, every project
@@ -152,7 +152,7 @@ def layered(
 
     `export=True` writes into the run context rather than `os.environ`, so a
     library caller does not have its process environment mutated behind its back
-    and parallel recipes cannot race each other's exports.
+    and parallel tasks cannot race each other's exports.
     """
     paths = [Path(f).expanduser() for f in files] if files is not None else layer_files(repo, local=local)
     merged: dict[str, str] = {}

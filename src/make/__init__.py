@@ -1,9 +1,9 @@
-"""make -- a command runner whose recipes are Python.
+"""make -- a command runner whose tasks are Python.
 
     # Makefile.py
-    from make import recipe, sh
+    from make import task, sh
 
-    @recipe(group="app", requires=["cargo"])
+    @task(group="app", requires=["cargo"])
     def test(*, fast: bool = False) -> None:
         \"\"\"Run the test suite.\"\"\"
         sh("cargo", "test", *(["--lib"] if fast else []))
@@ -11,26 +11,26 @@
     $ mk app.test --fast
 
 The command line comes from the signature, so there is no second schema to keep
-in sync. Recipes are ordinary functions: importable, unit-testable, and
+in sync. Tasks are ordinary functions: importable, unit-testable, and
 distributable as versioned packages instead of a directory someone `git clone`d.
 """
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from . import config, env, fs
 from .context import Context, confirm, ctx, echo, info, note, paint, path, step, warn
-from .errors import Aborted, CommandFailed, ConfigError, MakeError, RecipeError, ToolMissing, UsageError
+from .errors import Aborted, CommandFailed, ConfigError, MakeError, TaskError, ToolMissing, UsageError
 from .params import Arg, arg
-from .recipes import Group, Recipe, group, recipe, registry
 from .runner import invoke
 from .sh import Result, sh
+from .tasks import Group, Task, group, registry, task
 
 __all__ = [
     "__version__",
     # authoring
-    "recipe",
+    "task",
     "group",
     "invoke",
     "sh",
@@ -49,7 +49,7 @@ __all__ = [
     "paint",
     "confirm",
     # types
-    "Recipe",
+    "Task",
     "Group",
     "Context",
     "Result",
@@ -58,7 +58,7 @@ __all__ = [
     # errors
     "MakeError",
     "UsageError",
-    "RecipeError",
+    "TaskError",
     "ConfigError",
     "ToolMissing",
     "CommandFailed",

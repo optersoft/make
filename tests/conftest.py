@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 
 from make import config
-from make.recipes import Registry
-from make.recipes import registry as global_registry
+from make.tasks import Registry
+from make.tasks import registry as global_registry
 
 
 @pytest.fixture(autouse=True)
@@ -15,7 +15,7 @@ def clean_registry():
     """Each test starts with an empty registry, and gives back what was there.
 
     Registration happens at import time and a module is imported once per
-    process, so clearing without restoring would unregister every recipe that
+    process, so clearing without restoring would unregister every task that
     any other test file imported -- permanently, for the rest of the session.
     """
     saved = global_registry.snapshot()

@@ -1,16 +1,16 @@
-"""Making shared recipes an ordinary dependency.
+"""Making shared tasks an ordinary dependency.
 
-This is the feature the whole project exists for. `just` shares recipes by
-`git clone --depth 1` into a gitignored directory, driven by a `_shared` recipe
+This is the feature the whole project exists for. `just` shares tasks by
+`git clone --depth 1` into a gitignored directory, driven by a `_shared` task
 copy-pasted into every consumer -- no versions, no pinning, no lockfile, and a
 `git pull --ff-only || true` that fails silently and leaves you on whatever HEAD
 happened to be there.
 
-Here a recipe file declares its dependencies inline, in PEP 723 form:
+Here a task file declares its dependencies inline, in PEP 723 form:
 
     # /// script
     # requires-python = ">=3.11"
-    # dependencies = ["mkrun>=0.1", "acme-recipes>=0.4"]
+    # dependencies = ["mkrun>=0.2", "acme-tasks>=0.4"]
     # ///
 
 If the current interpreter already satisfies them, nothing happens -- that is
@@ -20,10 +20,10 @@ under `uv run`, which resolves into a cached environment. Pin it with
 `mk --sync` (`uv lock --script`).
 
 The satisfaction check errs toward re-executing: a specifier it cannot parse
-counts as unsatisfied. Being needlessly slow is recoverable; running a recipe
+counts as unsatisfied. Being needlessly slow is recoverable; running a task
 against the wrong version of its library is not.
 
-A recipe package can also come from the repository that owns it, declared the
+A task package can also come from the repository that owns it, declared the
 way the Rust crates here declare each other:
 
     # [tool.uv.sources]
@@ -68,7 +68,7 @@ _REQUIREMENT = re.compile(
 
 _CLAUSE = re.compile(r"(?P<op>==|!=|>=|<=|~=|>|<)\s*(?P<version>[0-9A-Za-z.*+!-]+)")
 
-#: Where a repo, or the user, redirects a recipe package to a local checkout.
+#: Where a repo, or the user, redirects a task package to a local checkout.
 SOURCES_FILE = "sources.toml"
 
 
@@ -79,7 +79,7 @@ def canonical_name(name: str) -> str:
 
 @dataclass
 class ScriptMetadata:
-    """The `# /// script` block of a recipe file."""
+    """The `# /// script` block of a task file."""
 
     dependencies: list[str] = field(default_factory=list)
     requires_python: str | None = None
@@ -93,9 +93,9 @@ class ScriptMetadata:
     def sources(self) -> dict[str, dict]:
         """The `[tool.uv.sources]` table: where each dependency comes from.
 
-        This is how a recipe package is consumed from the repository that owns
-        it -- `{ path = "../hetzner/recipes" }` for a checkout beside this one,
-        `{ git = "ssh://...", subdirectory = "recipes" }` otherwise -- the same
+        This is how a task package is consumed from the repository that owns
+        it -- `{ path = "../hetzner/tasks" }` for a checkout beside this one,
+        `{ git = "ssh://...", subdirectory = "tasks" }` otherwise -- the same
         split the Rust crates here use.
         """
         table = self.raw.get("tool", {}).get("uv", {}).get("sources", {})
@@ -204,7 +204,7 @@ def _requirement_met(requirement: str) -> bool:
 
 
 def needs_bootstrap(metadata: ScriptMetadata) -> bool:
-    """True when this interpreter cannot run the recipe file as declared."""
+    """True when this interpreter cannot run the task file as declared."""
     if os.environ.get(BOOTSTRAP_FLAG):
         return False
     if not metadata.dependencies:
@@ -214,7 +214,7 @@ def needs_bootstrap(metadata: ScriptMetadata) -> bool:
         # a bare `hetzner-make>=0.1` that an already-installed copy would
         # satisfy -- from PyPI, or from the wrong checkout. The version check
         # cannot see the difference, so it does not get to decide.
-        debug("bootstrap: the recipe file declares [tool.uv.sources]")
+        debug("bootstrap: the task file declares [tool.uv.sources]")
         return True
     for requirement in metadata.dependencies:
         if not _requirement_met(requirement):
@@ -242,17 +242,17 @@ def _requirement_name(requirement: str) -> str:
 
 
 def _declares_self(metadata: ScriptMetadata) -> bool:
-    """Does the recipe file already say where to get the tool from?"""
+    """Does the task file already say where to get the tool from?"""
     return any(_requirement_name(r) == DISTRIBUTION for r in metadata.dependencies)
 
 
 def _self_requirement(metadata: ScriptMetadata) -> list[str]:
     """How the child environment should obtain `make` itself.
 
-    Nothing, when the recipe file already declares it. Adding our own on top
+    Nothing, when the task file already declares it. Adding our own on top
     would hand uv two different sources for one package -- a hard error the
     moment the file pins a git URL or a specific version, which is exactly what
-    a consumer of a private recipe package does.
+    a consumer of a private task package does.
     """
     if _declares_self(metadata):
         return []
@@ -272,12 +272,12 @@ def _self_requirement(metadata: ScriptMetadata) -> list[str]:
 
 
 def lock_path(path: Path) -> Path:
-    """Where `uv lock --script` puts the lockfile for a recipe file."""
+    """Where `uv lock --script` puts the lockfile for a task file."""
     return path.with_name(path.name + ".lock")
 
 
 # --------------------------------------------------------------------------
-# Local source overrides -- cargo's `[patch]`, for recipe packages
+# Local source overrides -- cargo's `[patch]`, for task packages
 # --------------------------------------------------------------------------
 
 
@@ -344,7 +344,7 @@ def _inline_table(spec: dict) -> str:
     return "{ " + body + " }"
 
 
-def write_shim(recipe_file: Path, metadata: ScriptMetadata, overrides: dict[str, dict]) -> Path:
+def write_shim(task_file: Path, metadata: ScriptMetadata, overrides: dict[str, dict]) -> Path:
     """Generate the script uv resolves when a local override is in force.
 
     uv has no way to redirect a script's source from outside the script: `uv
@@ -355,9 +355,9 @@ def write_shim(recipe_file: Path, metadata: ScriptMetadata, overrides: dict[str,
     hand control back to `make`.
 
     Deliberately not locked: a path source pins no commit, exactly like a cargo
-    path dependency. The committed recipe file and its lockfile are untouched.
+    path dependency. The committed task file and its lockfile are untouched.
     """
-    from .discovery import recipe_root
+    from .discovery import task_root
 
     sources = dict(metadata.sources)
     for name, spec in overrides.items():
@@ -376,16 +376,16 @@ def write_shim(recipe_file: Path, metadata: ScriptMetadata, overrides: dict[str,
         lines += [f"# {name} = {_inline_table(spec)}" for name, spec in sorted(sources.items())]
     lines.append("# ///")
 
-    shim = recipe_root(recipe_file) / ".make" / "bootstrap.py"
+    shim = task_root(task_file) / ".make" / "bootstrap.py"
     shim.parent.mkdir(parents=True, exist_ok=True)
     shim.write_text(
         "\n".join(lines)
         + f'''
 """GENERATED by `make` -- do not edit, do not commit.
 
-The environment for {recipe_file.name}, with the sources in
+The environment for {task_file.name}, with the sources in
 {", ".join(sorted({spec["origin"] for spec in overrides.values()}))}
-applied. Delete the override to go back to what the recipe file declares.
+applied. Delete the override to go back to what the task file declares.
 """
 
 import sys
@@ -431,12 +431,12 @@ def script_interpreter(path: Path, uv: str) -> str | None:
     return interpreter
 
 
-def reexec(metadata: ScriptMetadata, argv: list[str], recipe_file: Path | None = None) -> int:
+def reexec(metadata: ScriptMetadata, argv: list[str], task_file: Path | None = None) -> int:
     """Run this command again in an environment that has the declared deps."""
     uv = shutil.which("uv")
     if uv is None:
         raise MakeError(
-            "this recipe file declares dependencies, which needs `uv` on PATH",
+            "this task file declares dependencies, which needs `uv` on PATH",
             hint="install it from https://docs.astral.sh/uv/ , or install the dependencies "
             "into the current environment yourself and re-run",
         )
@@ -447,20 +447,20 @@ def reexec(metadata: ScriptMetadata, argv: list[str], recipe_file: Path | None =
     # Script mode, whenever the file says anything `uv run --with` cannot hear:
     # a local override, a `[tool.uv.sources]` table, or a lockfile to obey.
     # Only `uv sync --script` reads the file itself.
-    if recipe_file is not None:
-        from .discovery import recipe_root
+    if task_file is not None:
+        from .discovery import task_root
 
         overrides = {
             name: spec
-            for name, spec in read_overrides(recipe_root(recipe_file)).items()
+            for name, spec in read_overrides(task_root(task_file)).items()
             if name in {_requirement_name(r) for r in metadata.dependencies}
         }
-        script = recipe_file
+        script = task_file
         if overrides:
-            script = write_shim(recipe_file, metadata, overrides)
+            script = write_shim(task_file, metadata, overrides)
             for name, spec in sorted(overrides.items()):
                 note(f"{name} overridden -> {spec['path']}  ({Path(spec['origin']).name})")
-        if overrides or metadata.sources or lock_path(recipe_file).is_file():
+        if overrides or metadata.sources or lock_path(task_file).is_file():
             interpreter = script_interpreter(script, uv)
             if interpreter is not None:
                 debug(f"bootstrap: using the environment for {script.name} at {interpreter}")
@@ -489,7 +489,7 @@ def reexec(metadata: ScriptMetadata, argv: list[str], recipe_file: Path | None =
     # "resolving..." on every single invocation is just noise.
     marker = _bootstrap_marker(metadata)
     if not marker.exists():
-        note("resolving recipe dependencies with uv (cached after the first run)")
+        note("resolving task dependencies with uv (cached after the first run)")
     debug("bootstrap: " + " ".join(command))
 
     completed = subprocess.run(command, env=environment, check=False)
@@ -514,7 +514,7 @@ def _bootstrap_marker(metadata: ScriptMetadata) -> Path:
 
 
 def add(path: Path, package: str, *, source_path: str | None = None, git: str | None = None) -> int:
-    """Add a recipe package to the recipe file, with its source.
+    """Add a task package to the task file, with its source.
 
     `uv add --script` writes both the requirement and the `[tool.uv.sources]`
     entry, in the form uv itself will read back. Hand-editing the table is the
@@ -529,7 +529,7 @@ def add(path: Path, package: str, *, source_path: str | None = None, git: str | 
 
     command = [uv, "add", "--script", str(path), package]
     if source_path:
-        # Editable, so the recipes a sibling checkout is currently on are the
+        # Editable, so the tasks a sibling checkout is currently on are the
         # ones that run -- the point of pointing at a checkout at all.
         command += ["--editable", source_path]
     elif git:

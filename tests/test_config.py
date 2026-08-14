@@ -29,7 +29,7 @@ def fresh():
     Web.reset()
 
 
-def test_configure_from_the_recipe_file(project: Path):
+def test_configure_from_the_task_file(project: Path):
     Web.configure(bin="acme-web", port=8005)
     with context(root=project):
         assert Web.bin == "acme-web"

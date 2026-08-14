@@ -1,11 +1,11 @@
 """Shell completion, generated from the signatures rather than hand-maintained.
 
-Each script asks the tool itself (`mk --names`) for the recipes visible in the
-current directory, so completion follows whatever the recipe file imports --
-including recipes that arrived with a dependency.
+Each script asks the tool itself (`mk --names`) for the tasks visible in the
+current directory, so completion follows whatever the task file imports --
+including tasks that arrived with a dependency.
 
 The command is `mk`. These deliberately do not complete `make`: that name
-belongs to GNU make, and completing it here would offer this tool's recipes to
+belongs to GNU make, and completing it here would offer this tool's tasks to
 someone building a C project. Anyone aliasing `make=mk` can add the one line
 each script needs, which is noted in it.
 """
@@ -39,10 +39,10 @@ _ZSH = """\
 # mk completion for zsh -- put this on your $fpath as _mk
 # Aliased make=mk? add: compdef _mk make
 _mk() {
-    local -a recipes
-    recipes=(${(f)"$(mk --names 2>/dev/null)"})
+    local -a tasks
+    tasks=(${(f)"$(mk --names 2>/dev/null)"})
     _arguments -s \\
-        '(-l --list)'{-l,--list}'[list recipes]' \\
+        '(-l --list)'{-l,--list}'[list tasks]' \\
         '(-n --dry-run)'{-n,--dry-run}'[print commands instead of running them]' \\
         '(-y --yes)'{-y,--yes}'[pre-answer confirmations]' \\
         '(-f --force)'{-f,--force}'[ignore staleness]' \\
@@ -50,30 +50,30 @@ _mk() {
         '(-q --quiet)'{-q,--quiet}'[only show errors]' \\
         '(-v --verbose)'{-v,--verbose}'[more detail]' \\
         '(-C --cwd)'{-C,--cwd}'[change directory]:dir:_files -/' \\
-        '(-F --file)'{-F,--file}'[recipe file]:file:_files' \\
+        '(-F --file)'{-F,--file}'[task file]:file:_files' \\
         '--doctor[check declared tools and where each package resolved from]' \\
         '--sync[pin dependencies]' \\
-        '--add[add a recipe package]:package:' \\
-        '*:recipe:(${recipes})'
+        '--add[add a task package]:package:' \\
+        '*:task:(${tasks})'
 }
 _mk "$@"
 """
 
 _FISH = """\
 # mk completion for fish -- save as ~/.config/fish/completions/mk.fish
-# Aliased make=mk? add: complete -c make -f -a '(__mk_recipes)'
-function __mk_recipes
+# Aliased make=mk? add: complete -c make -f -a '(__mk_tasks)'
+function __mk_tasks
     mk --names 2>/dev/null
 end
-complete -c mk -f -a '(__mk_recipes)'
-complete -c mk -s l -l list    -d 'list recipes'
+complete -c mk -f -a '(__mk_tasks)'
+complete -c mk -s l -l list    -d 'list tasks'
 complete -c mk -s n -l dry-run -d 'print commands instead of running them'
 complete -c mk -s y -l yes     -d 'pre-answer confirmations'
 complete -c mk -s j -l jobs    -d 'parallel prerequisites' -r
-complete -c mk -s F -l file    -d 'recipe file' -r
+complete -c mk -s F -l file    -d 'task file' -r
 complete -c mk      -l doctor  -d 'check declared tools'
 complete -c mk      -l sync    -d 'pin dependencies'
-complete -c mk      -l add     -d 'add a recipe package' -r
+complete -c mk      -l add     -d 'add a task package' -r
 """
 
 _SCRIPTS = {"bash": _BASH, "zsh": _ZSH, "fish": _FISH}

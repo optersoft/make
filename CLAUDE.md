@@ -3,7 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 **Read [`README.md`](README.md) first** — it is the authoritative description of what the tool
-does and the whole authoring API (`@recipe`, `sh`, `fs`, `config`, `env`, `testing`). Don't
+does and the whole authoring API (`@task`, `sh`, `fs`, `config`, `env`, `testing`). Don't
 re-derive any of it here. What follows is only what a reader of the source would get wrong.
 
 `optersoft/make` is **two Python distributions in one uv workspace**:
@@ -11,11 +11,11 @@ re-derive any of it here. What follows is only what a reader of the source would
 | Path | Distribution | What it is |
 |---|---|---|
 | `src/make/` | **`mkrun`** | the runner. Generic, published to PyPI, MIT OR Apache-2.0 |
-| `optersoft/` | **`optersoft-make`** | optersoft's own recipes. Internal, never published |
+| `optersoft/` | **`optersoft-make`** | optersoft's own tasks. Internal, never published |
 
 They are packaged separately and resolved together: `[tool.uv.workspace] members = ["optersoft"]`,
 with `mkrun = { workspace = true }` in the member, so a runner change is tested against real
-recipes in the same commit.
+tasks in the same commit.
 
 ## Commands
 
@@ -36,10 +36,10 @@ markdown**, and handing it the whole directory reformats the hand-packed example
 
 **1. The command is `mk`. There is no `make` command.** `[project.scripts]` declares `mk` only;
 a `make` script would shadow GNU make on the PATH of every Unix machine. The *import* name is
-still `make`, and recipe files are still `Makefile.py` / `mk.py`. `tests/test_cli.py` asserts the
+still `make`, and task files are still `Makefile.py` / `mk.py`. `tests/test_cli.py` asserts the
 distribution declares exactly `{mk}` — that test is the guard, because nothing else notices.
 
-**2. `uv run --with` cannot see `[tool.uv.sources]`.** Only `uv sync --script` reads the recipe
+**2. `uv run --with` cannot see `[tool.uv.sources]`.** Only `uv sync --script` reads the task
 file. `bootstrap.reexec()` picks script mode whenever the file declares a source, has a local
 override, or has a lock, and the `--with` path otherwise — which is faster and keeps the
 `--with-editable` affordance for files that don't declare `mkrun` themselves. Getting this
@@ -58,11 +58,11 @@ dependency or extra — not even for the `box` shim — or CI and a bare clone b
 `Distribution not found at ../hetzner/make`. `optersoft_make.box` re-exports it *softly* and
 raises a `MakeError` naming the package when it is absent.
 
-## A recipe package belongs to the project it wraps
+## A task package belongs to the project it wraps
 
 The convention this tool exists to enable, and which this repo now follows:
 
-- A repo that owns a tool ships its recipes in **`<repo>/make/`**, as **`<repo>-make`**,
+- A repo that owns a tool ships its tasks in **`<repo>/make/`**, as **`<repo>-make`**,
   importing as `<repo>_make`. First one: **`hetzner-make`** (the `box` group, beside the
   `hetzner-box` crate it drives).
 - `optersoft/` here is what is *left* — the groups wrapping tools nobody owns (android, play,

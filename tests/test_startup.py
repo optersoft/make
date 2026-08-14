@@ -2,7 +2,7 @@
 
 A command runner is typed dozens of times an hour. `just` starts in about 5 ms;
 anything that feels slower than "instant" gets abandoned regardless of how good
-its recipes are. The budget is 150 ms warm -- generous next to the ~25 ms this
+its tasks are. The budget is 150 ms warm -- generous next to the ~25 ms this
 actually takes, but tight enough that an import-time regression (a heavy
 dependency, work at module scope) fails here instead of being discovered as a
 vague sense that the tool got sluggish.
@@ -21,10 +21,10 @@ from helpers import write
 BUDGET_SECONDS = 0.15
 RUNS = 5
 
-RECIPES = """
-from make import recipe, sh
+TASKS = """
+from make import task, sh
 
-@recipe
+@task
 def noop() -> None:
     \"\"\"Do nothing at all.\"\"\"
     sh("true")
@@ -49,7 +49,7 @@ def _time(argv: list[str], cwd: Path) -> float:
 
 @pytest.mark.parametrize("argv", [["--list"], ["--dry-run", "noop"]])
 def test_startup_is_within_budget(project: Path, argv: list[str]):
-    write(project / "Makefile.py", RECIPES)
+    write(project / "Makefile.py", TASKS)
     elapsed = _time(argv, project)
     assert elapsed < BUDGET_SECONDS, (
         f"{' '.join(argv)} took {elapsed * 1000:.0f}ms (budget {BUDGET_SECONDS * 1000:.0f}ms)"

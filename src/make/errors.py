@@ -2,7 +2,7 @@
 
 Everything the user can plausibly hit is a `MakeError`: the CLI prints its
 message and exits with `exit_code`, no traceback. A traceback escaping to the
-terminal therefore means a bug in `make` itself, not a mistake in a recipe --
+terminal therefore means a bug in `make` itself, not a mistake in a task --
 which is the whole point of keeping this hierarchy narrow.
 """
 
@@ -21,13 +21,13 @@ class MakeError(Exception):
 
 
 class UsageError(MakeError):
-    """Bad command line: unknown recipe, bad flag, missing argument."""
+    """Bad command line: unknown task, bad flag, missing argument."""
 
     exit_code = 2
 
 
-class RecipeError(MakeError):
-    """A recipe is malformed, duplicated, or cannot be registered."""
+class TaskError(MakeError):
+    """A task is malformed, duplicated, or cannot be registered."""
 
 
 class ConfigError(MakeError):

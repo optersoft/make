@@ -1,7 +1,7 @@
 # Coming from `just`
 
 `just` is a good dispatcher wrapped around a language that recipes outgrow. Once
-a recipe body has a loop, an `if`, or three variables that must agree, you are
+a task body has a loop, an `if`, or three variables that must agree, you are
 writing shell inside string interpolation with no types, no tests, and no way to
 share it except copying a file.
 
@@ -32,7 +32,7 @@ working.
 | `[group('web')]` + a `web-` name prefix | `group="web"`, so `web.start` |
 | `[private]` | `hidden=True`, or a leading underscore |
 | `alias b := a` | `aliases=["b"]` |
-| `recipe: dep1 dep2` | `needs=[dep1, dep2]` |
+| `task: dep1 dep2` | `needs=[dep1, dep2]` |
 | `*ARGS` | `*args: str` |
 | `{{ ARGS }}` spliced into bash | `sh("cmd", *args)` |
 | `{{ quote(x) }}` | nothing to do — values are never re-parsed |
@@ -49,8 +49,8 @@ working.
   imperceptible, but `just` is genuinely faster, and staying under a 150 ms
   budget here is an explicit, tested constraint rather than a free property.
 - **One binary, no runtime.** `just` is a single Rust binary. This needs Python,
-  and shared recipe packages need `uv`.
-- **Bash is right for one-liners.** A recipe that is genuinely `cargo test` is
+  and shared task packages need `uv`.
+- **Bash is right for one-liners.** A task that is genuinely `cargo test` is
   shorter in a justfile. `sh.bash(...)` exists so such a body can move across
   verbatim and stay that way.
 

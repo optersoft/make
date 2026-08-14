@@ -7,13 +7,13 @@ from typing import Annotated, Literal
 
 import pytest
 
-from make.errors import RecipeError, UsageError
+from make.errors import TaskError, UsageError
 from make.params import arg, build_params, parse_args, render_usage
 
 
 def call(fn, argv):
     params = build_params(fn)
-    parsed = parse_args(params, argv, recipe="r")
+    parsed = parse_args(params, argv, task="r")
     return parsed.args, parsed.kwargs
 
 
@@ -120,7 +120,7 @@ def test_docstring_supplies_parameter_help():
 def test_kwargs_are_rejected_at_registration():
     def fn(**anything): ...
 
-    with pytest.raises(RecipeError, match="cannot take arbitrary keyword arguments"):
+    with pytest.raises(TaskError, match="cannot take arbitrary keyword arguments"):
         build_params(fn)
 
 

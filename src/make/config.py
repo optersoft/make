@@ -1,4 +1,4 @@
-"""Typed configuration for shared recipe packages.
+"""Typed configuration for shared task packages.
 
 The problem this replaces: a shared `just` file needs per-project values
 (`web_port`, `android_module`), and `just` has no way to declare one as
@@ -21,7 +21,7 @@ and reads `web.port` anywhere. Values resolve, last wins:
     dataclass defaults  <  make.toml / pyproject  <  .configure()  <  MAKE_WEB_PORT
 
 A missing required value raises at the point of use with the field, its type,
-the recipe that wanted it, and the three places it can be set.
+the task that wanted it, and the three places it can be set.
 """
 
 from __future__ import annotations
@@ -175,7 +175,7 @@ class Section(Generic[T]):
     # -- declaration-site API ---------------------------------------------
 
     def configure(self, **values: Any) -> Section[T]:
-        """Set values from the recipe file. Beats config files, loses to the environment."""
+        """Set values from the task file. Beats config files, loses to the environment."""
         unknown = set(values) - {f.name for f in dataclasses.fields(self.cls)}
         if unknown:
             known = ", ".join(sorted(f.name for f in dataclasses.fields(self.cls)))

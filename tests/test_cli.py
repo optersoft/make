@@ -9,12 +9,12 @@ from helpers import write
 
 from make.bootstrap import ScriptMetadata, needs_bootstrap, read_metadata
 from make.cli import main
-from make.discovery import find_recipe_file, require_recipe_file
+from make.discovery import find_task_file, require_task_file
 from make.errors import UsageError
 
-RECIPES = """
+TASKS = """
 from pathlib import Path
-from make import recipe, group, sh
+from make import task, group, sh
 
 web = group("web")
 
@@ -28,12 +28,12 @@ def stop() -> None:
     \"\"\"Stop it.\"\"\"
     sh("pkill", "dx")
 
-@recipe
+@task
 def copy(src: Path, dest: str = ".") -> None:
     \"\"\"Copy a thing.\"\"\"
     sh("cp", src, dest)
 
-@recipe(hidden=True)
+@task(hidden=True)
 def internal() -> None:
     sh("true")
 """
@@ -41,7 +41,7 @@ def internal() -> None:
 
 @pytest.fixture
 def repo(project: Path) -> Path:
-    write(project / "Makefile.py", RECIPES)
+    write(project / "Makefile.py", TASKS)
     return project
 
 
@@ -50,7 +50,7 @@ def test_list_is_the_default(repo: Path, capsys):
     assert "web.start" in capsys.readouterr().err
 
 
-def test_hidden_recipes_are_not_listed(repo: Path, capsys):
+def test_hidden_tasks_are_not_listed(repo: Path, capsys):
     main(["--list"])
     assert "internal" not in capsys.readouterr().err
 
@@ -77,20 +77,20 @@ def test_names_output_feeds_shell_completion(repo: Path, capsys):
     assert set(capsys.readouterr().out.split()) == {"copy", "web.start", "web.stop"}
 
 
-def test_dispatch_runs_the_recipe(repo: Path, capsys):
+def test_dispatch_runs_the_task(repo: Path, capsys):
     assert main(["--dry-run", "web.start", "--port", "9000"]) == 0
     assert "dx serve --port 9000" in capsys.readouterr().err
 
 
-def test_several_recipes_in_one_invocation(repo: Path, capsys):
+def test_several_tasks_in_one_invocation(repo: Path, capsys):
     assert main(["--dry-run", "web.start", "web.stop"]) == 0
     err = capsys.readouterr().err
     assert "dx serve" in err
     assert "pkill dx" in err
 
 
-def test_an_open_positional_slot_wins_over_starting_a_new_recipe(repo: Path, capsys):
-    """A value is never silently reinterpreted as the next recipe.
+def test_an_open_positional_slot_wins_over_starting_a_new_task(repo: Path, capsys):
+    """A value is never silently reinterpreted as the next task.
 
     `copy` still has an optional `dest`, so `web.stop` fills it -- which is what
     the signature says, and is checkable without knowing what else is registered.
@@ -108,28 +108,28 @@ def test_chaining_resumes_once_the_slots_are_full(repo: Path, capsys):
     assert "pkill dx" in err
 
 
-def test_recipe_help(repo: Path, capsys):
+def test_task_help(repo: Path, capsys):
     assert main(["web.start", "--help"]) == 0
     out = capsys.readouterr().err
     assert "usage: web.start" in out
     assert "--port" in out
 
 
-def test_unknown_recipe_exits_two(repo: Path, capsys):
+def test_unknown_task_exits_two(repo: Path, capsys):
     assert main(["nope"]) == 2
-    assert "no recipe named" in capsys.readouterr().err
+    assert "no task named" in capsys.readouterr().err
 
 
 def test_discovery_walks_up(repo: Path, monkeypatch, capsys):
     nested = repo / "a" / "b"
     nested.mkdir(parents=True)
     monkeypatch.chdir(nested)
-    assert find_recipe_file(nested) == repo / "Makefile.py"
+    assert find_task_file(nested) == repo / "Makefile.py"
     assert main(["--dry-run", "web.stop"]) == 0
 
 
-def test_recipes_run_at_the_recipe_file_root(repo: Path, monkeypatch, capsys):
-    write(repo / "Makefile.py", RECIPES + "\n@recipe\ndef where() -> None:\n    print(Path.cwd())\n")
+def test_tasks_run_at_the_task_file_root(repo: Path, monkeypatch, capsys):
+    write(repo / "Makefile.py", TASKS + "\n@task\ndef where() -> None:\n    print(Path.cwd())\n")
     nested = repo / "deep"
     nested.mkdir()
     monkeypatch.chdir(nested)
@@ -139,8 +139,7 @@ def test_recipes_run_at_the_recipe_file_root(repo: Path, monkeypatch, capsys):
 
 def test_keep_cwd_runs_where_the_user_stood(repo: Path, monkeypatch, capsys):
     write(
-        repo / "Makefile.py",
-        RECIPES + "\n@recipe(keep_cwd=True)\ndef where() -> None:\n    print(Path.cwd())\n",
+        repo / "Makefile.py", TASKS + "\n@task(keep_cwd=True)\ndef where() -> None:\n    print(Path.cwd())\n"
     )
     nested = repo / "deep"
     nested.mkdir()
@@ -149,24 +148,24 @@ def test_keep_cwd_runs_where_the_user_stood(repo: Path, monkeypatch, capsys):
     assert capsys.readouterr().out.strip() == str(nested)
 
 
-def test_missing_recipe_file_explains_how_to_start(project: Path):
+def test_missing_task_file_explains_how_to_start(project: Path):
     with pytest.raises(UsageError) as caught:
-        require_recipe_file(project)
-    assert "no recipe file found" in caught.value.message
+        require_task_file(project)
+    assert "no task file found" in caught.value.message
     assert "Makefile.py" in (caught.value.hint or "")
 
 
 def test_a_stray_make_py_is_diagnosed(project: Path):
     write(project / "make.py", "x = 1\n")
     with pytest.raises(UsageError) as caught:
-        require_recipe_file(project)
+        require_task_file(project)
     assert "rename it to Makefile.py" in (caught.value.hint or "")
 
 
 def test_env_flag_reaches_commands(repo: Path, capsys):
     write(
         repo / "Makefile.py",
-        "from make import recipe, env\n\n@recipe\ndef show() -> None:\n    print(env.get('TOKEN'))\n",
+        "from make import task, env\n\n@task\ndef show() -> None:\n    print(env.get('TOKEN'))\n",
     )
     assert main(["--env", "TOKEN=abc", "show"]) == 0
     assert capsys.readouterr().out.strip() == "abc"
@@ -175,7 +174,7 @@ def test_env_flag_reaches_commands(repo: Path, capsys):
 def test_doctor_reports_a_missing_tool(repo: Path, capsys, monkeypatch):
     write(
         repo / "Makefile.py",
-        'from make import recipe, sh\n\n@recipe(requires=["definitely-not-installed"])\n'
+        'from make import task, sh\n\n@task(requires=["definitely-not-installed"])\n'
         "def build() -> None:\n    sh('true')\n",
     )
     assert main(["--doctor"]) == 1
@@ -200,14 +199,14 @@ def test_completions_are_emitted(repo: Path, capsys):
     assert main(["--completions", "zsh"]) == 0
     out = capsys.readouterr().out
     assert "#compdef mk" in out
-    # Completing `make` would offer these recipes to someone building a C
+    # Completing `make` would offer these tasks to someone building a C
     # project. The script says how to opt in; it must not do it for you.
     assert "#compdef make" not in out
     assert "compdef _mk make" in out, "the opt-in line for an alias should still be documented"
 
 
-def test_error_in_a_recipe_points_at_the_user_file(repo: Path, capsys):
-    write(repo / "Makefile.py", "from make import recipe\n\n@recipe\ndef boom() -> None:\n    1 / 0\n")
+def test_error_in_a_task_points_at_the_user_file(repo: Path, capsys):
+    write(repo / "Makefile.py", "from make import task\n\n@task\ndef boom() -> None:\n    1 / 0\n")
     assert main(["boom"]) == 1
     err = capsys.readouterr().err
     assert "ZeroDivisionError" in err
@@ -239,7 +238,7 @@ def test_a_satisfied_dependency_does_not_bootstrap():
     Written as "make>=0.1" this passed on a machine with a pre-rename install
     still lying around and failed everywhere else.
     """
-    assert not needs_bootstrap(ScriptMetadata(dependencies=["mkrun>=0.1"]))
+    assert not needs_bootstrap(ScriptMetadata(dependencies=["mkrun>=0.2"]))
 
 
 def test_an_unsatisfied_dependency_bootstraps():
@@ -311,7 +310,7 @@ def test_a_lockfile_uv_cannot_use_falls_back_rather_than_failing(project: Path, 
 def test_a_file_that_declares_the_tool_gets_no_second_source():
     """Two sources for one package is a hard error in uv.
 
-    A consumer of a private recipe package pins the tool to a git URL; injecting
+    A consumer of a private task package pins the tool to a git URL; injecting
     our own `--with mkrun==...` on top made that combination fail outright.
     """
     from make.bootstrap import _declares_self, _requirement_name, _self_requirement
@@ -338,7 +337,7 @@ def test_requirement_names_normalise():
     from make.bootstrap import _requirement_name
 
     for written, expected in [
-        ("acme_recipes_web>=0.1", "acme-recipes-web"),
+        ("acme_tasks_web>=0.1", "acme-tasks-web"),
         ("MkRun", "mkrun"),
         ("pkg[extra]==1.0", "pkg"),
         ('pkg ; python_version > "3.11"', "pkg"),
@@ -347,12 +346,12 @@ def test_requirement_names_normalise():
         assert _requirement_name(written) == expected
 
 
-def test_loading_a_recipe_file_leaves_no_pycache(repo: Path):
+def test_loading_a_task_file_leaves_no_pycache(repo: Path):
     """Most repos this runs in are Rust or Android projects that do not
     gitignore `__pycache__/`, so it shows up as untracked noise forever."""
-    from make.discovery import load_recipe_file
+    from make.discovery import load_task_file
 
-    load_recipe_file(repo / "Makefile.py")
+    load_task_file(repo / "Makefile.py")
     assert not (repo / "__pycache__").exists()
 
 

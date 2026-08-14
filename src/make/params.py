@@ -9,7 +9,7 @@ keyword-only in the signature, an option on the command line:
     mk publish ./app.aab --track prod --locale es-ES --locale en-US --dry
 
 There is no second schema to keep in sync with the function, which is the class
-of drift that makes a `just` variable and the recipe that reads it disagree.
+of drift that makes a `just` variable and the task that reads it disagree.
 Anything the signature cannot express -- a short flag, help text, an environment
 fallback -- attaches through `Annotated[..., arg(...)]` rather than by moving
 the declaration somewhere else.
@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, get_args, get_origin
 
-from .errors import RecipeError, UsageError
+from .errors import TaskError, UsageError
 
 __all__ = ["Arg", "Param", "arg", "build_params", "parse_args", "render_usage"]
 
@@ -167,7 +167,7 @@ def _converter(
     if callable(annotation):
         return annotation, getattr(annotation, "__name__", "value"), None, False
 
-    raise RecipeError(f"parameter {param_name!r} has an unsupported annotation: {annotation!r}")
+    raise TaskError(f"parameter {param_name!r} has an unsupported annotation: {annotation!r}")
 
 
 # --------------------------------------------------------------------------
@@ -197,8 +197,8 @@ def build_params(fn: Callable[..., Any], *, doc_help: dict[str, str] | None = No
     params: list[Param] = []
     for name, sig_param in signature.parameters.items():
         if sig_param.kind is inspect.Parameter.VAR_KEYWORD:
-            raise RecipeError(
-                f"recipe {fn.__name__!r} declares **{name}: a recipe cannot take arbitrary "
+            raise TaskError(
+                f"task {fn.__name__!r} declares **{name}: a task cannot take arbitrary "
                 "keyword arguments, because there is no way to present them on a command line"
             )
 
@@ -251,7 +251,7 @@ def build_params(fn: Callable[..., Any], *, doc_help: dict[str, str] | None = No
     seen_varargs = False
     for param in params:
         if seen_varargs and param.kind == "positional":
-            raise RecipeError("positional parameters cannot follow *args")
+            raise TaskError("positional parameters cannot follow *args")
         seen_varargs = seen_varargs or param.kind == "varargs"
     return params
 
@@ -274,8 +274,8 @@ def _convert(param: Param, raw: str, where: str) -> Any:
         raise UsageError(f"{where}: invalid value {raw!r} -- {exc}") from exc
 
 
-def parse_args(params: Sequence[Param], argv: Sequence[str], *, recipe: str) -> ParsedCall:
-    """Turn the tokens after a recipe name into positional/keyword arguments."""
+def parse_args(params: Sequence[Param], argv: Sequence[str], *, task: str) -> ParsedCall:
+    """Turn the tokens after a task name into positional/keyword arguments."""
     options = {p.flag: p for p in params if p.kind == "option"}
     negatives = {p.negative_flag: p for p in params if p.kind == "option" and p.is_flag}
     shorts = {p.short: p for p in params if p.kind == "option" and p.short}
@@ -296,9 +296,9 @@ def parse_args(params: Sequence[Param], argv: Sequence[str], *, recipe: str) -> 
         else:
             index += 1
             if index >= len(tokens):
-                raise UsageError(f"{recipe} {token}: expected a value ({param.type_label})")
+                raise UsageError(f"{task} {token}: expected a value ({param.type_label})")
             raw = tokens[index]
-        value = _convert(param, raw, f"{recipe} {token}")
+        value = _convert(param, raw, f"{task} {token}")
         if param.repeat:
             given.setdefault(param.name, []).append(value)
         else:
@@ -334,13 +334,13 @@ def parse_args(params: Sequence[Param], argv: Sequence[str], *, recipe: str) -> 
                 given[negative.name] = False
                 index += 1
                 continue
-            raise UsageError(_unknown_option(recipe, name, list(options) + list(negatives)))
+            raise UsageError(_unknown_option(task, name, list(options) + list(negatives)))
 
         if token.startswith("-") and len(token) > 1 and not _looks_negative_number(token):
             name, _, inline = token.partition("=")
             param = shorts.get(name)
             if param is None:
-                raise UsageError(_unknown_option(recipe, name, list(shorts)))
+                raise UsageError(_unknown_option(task, name, list(shorts)))
             if param.is_flag and not inline:
                 given[param.name] = True
             elif param.is_flag:
@@ -353,12 +353,12 @@ def parse_args(params: Sequence[Param], argv: Sequence[str], *, recipe: str) -> 
         slot = len(positional_values)
         if slot < len(positionals):
             target = positionals[slot]
-            positional_values.append(_convert(target, token, f"{recipe} <{target.metavar}>"))
+            positional_values.append(_convert(target, token, f"{task} <{target.metavar}>"))
         elif varargs is not None:
-            rest.append(_convert(varargs, token, f"{recipe} <{varargs.metavar}>"))
+            rest.append(_convert(varargs, token, f"{task} <{varargs.metavar}>"))
         else:
             raise UsageError(
-                f"{recipe}: unexpected argument {token!r}", hint=f"usage: {render_usage(recipe, params)}"
+                f"{task}: unexpected argument {token!r}", hint=f"usage: {render_usage(task, params)}"
             )
         index += 1
 
@@ -373,8 +373,8 @@ def parse_args(params: Sequence[Param], argv: Sequence[str], *, recipe: str) -> 
             call.args.append(from_env)
         elif param.required:
             raise UsageError(
-                f"{recipe}: missing required argument <{param.metavar}> ({param.type_label})",
-                hint=f"usage: {render_usage(recipe, params)}",
+                f"{task}: missing required argument <{param.metavar}> ({param.type_label})",
+                hint=f"usage: {render_usage(task, params)}",
             )
         else:
             call.args.append(param.default)
@@ -393,8 +393,8 @@ def parse_args(params: Sequence[Param], argv: Sequence[str], *, recipe: str) -> 
             call.kwargs[param.name] = from_env
         elif param.required:
             raise UsageError(
-                f"{recipe}: missing required option {param.flag} ({param.type_label})",
-                hint=f"usage: {render_usage(recipe, params)}",
+                f"{task}: missing required option {param.flag} ({param.type_label})",
+                hint=f"usage: {render_usage(task, params)}",
             )
     return call
 
@@ -418,15 +418,15 @@ def _from_env(param: Param) -> Any:
     return param.convert(raw)
 
 
-def _unknown_option(recipe: str, name: str, known: Sequence[str]) -> str:
+def _unknown_option(task: str, name: str, known: Sequence[str]) -> str:
     close = difflib.get_close_matches(name, known, n=1, cutoff=0.6)
     suggestion = f" -- did you mean {close[0]}?" if close else ""
-    return f"{recipe}: unknown option {name}{suggestion}"
+    return f"{task}: unknown option {name}{suggestion}"
 
 
-def render_usage(recipe: str, params: Sequence[Param]) -> str:
+def render_usage(task: str, params: Sequence[Param]) -> str:
     """A one-line usage string, used in every argument error."""
-    parts = [recipe]
+    parts = [task]
     for param in params:
         if param.kind == "positional":
             parts.append(f"<{param.metavar}>" if param.required else f"[{param.metavar}]")

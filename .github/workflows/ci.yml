@@ -29,7 +29,7 @@ jobs:
           uv run ruff check src tests Makefile.py optersoft/src optersoft/tests optersoft/examples
           uv run ruff format --check src tests Makefile.py optersoft/src optersoft/tests optersoft/examples
       # tests/test_sources.py builds real wheels and runs real `uv sync`s to
-      # prove a recipe package resolves from a path and from git. The git half
+      # prove a task package resolves from a path and from git. The git half
       # uses a local bare repo over file://, so the only thing it fetches is a
       # build backend on a cold cache.
       - name: Test

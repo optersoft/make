@@ -7,29 +7,29 @@ from pathlib import Path
 
 import pytest
 
-from make.errors import Aborted, RecipeError, ToolMissing
-from make.recipes import recipe
-from make.recipes import registry as global_registry
+from make.errors import Aborted, TaskError, ToolMissing
 from make.runner import is_up_to_date, run_one
+from make.tasks import registry as global_registry
+from make.tasks import task
 from make.testing import context, record
 
 
 def test_needs_run_first_and_only_once():
     calls: list[str] = []
 
-    @recipe
+    @task
     def prepare() -> None:
         calls.append("prepare")
 
-    @recipe(needs=[prepare])
+    @task(needs=[prepare])
     def left() -> None:
         calls.append("left")
 
-    @recipe(needs=[prepare])
+    @task(needs=[prepare])
     def right() -> None:
         calls.append("right")
 
-    @recipe(needs=[left, right])
+    @task(needs=[left, right])
     def build() -> None:
         calls.append("build")
 
@@ -42,21 +42,21 @@ def test_needs_run_first_and_only_once():
 
 
 def test_circular_needs_is_reported_as_a_chain():
-    @recipe(needs=["b"])
+    @task(needs=["b"])
     def a() -> None: ...
 
-    @recipe(needs=["a"])
+    @task(needs=["a"])
     def b() -> None: ...
 
     with context():
-        with pytest.raises(RecipeError, match="circular needs"):
+        with pytest.raises(TaskError, match="circular needs"):
             run_one(global_registry.require("a"))
 
 
 def test_requires_is_checked_before_the_body_runs():
     ran = []
 
-    @recipe(requires=["fastlane"])
+    @task(requires=["fastlane"])
     def publish() -> None:
         ran.append(True)
 
@@ -66,8 +66,8 @@ def test_requires_is_checked_before_the_body_runs():
     assert ran == []
 
 
-def test_dangerous_recipe_refuses_without_confirmation():
-    @recipe(dangerous=True)
+def test_dangerous_task_refuses_without_confirmation():
+    @task(dangerous=True)
     def wipe() -> None: ...
 
     with context():
@@ -78,7 +78,7 @@ def test_dangerous_recipe_refuses_without_confirmation():
 def test_yes_pre_answers_the_gate():
     ran = []
 
-    @recipe(dangerous=True)
+    @task(dangerous=True)
     def wipe() -> None:
         ran.append(True)
 
@@ -87,12 +87,12 @@ def test_yes_pre_answers_the_gate():
     assert ran == [True]
 
 
-def test_abstract_recipe_refuses_with_instructions():
-    @recipe(group="play", abstract=True)
+def test_abstract_task_refuses_with_instructions():
+    @task(group="play", abstract=True)
     def test_gate() -> None: ...
 
     with context():
-        with pytest.raises(RecipeError) as caught:
+        with pytest.raises(TaskError) as caught:
             run_one(global_registry.require("play.test-gate"))
     assert "not implemented" in caught.value.message
     assert "override='play.test-gate'" in (caught.value.hint or "")
@@ -106,7 +106,7 @@ def test_staleness_skips_when_outputs_are_newer(project: Path):
 
     ran = []
 
-    @recipe(inputs=["src/*.css"], outputs=["out.css"])
+    @task(inputs=["src/*.css"], outputs=["out.css"])
     def css() -> None:
         ran.append(True)
 
@@ -125,7 +125,7 @@ def test_staleness_runs_when_an_input_is_newer(project: Path):
 
     ran = []
 
-    @recipe(inputs=["src/*.css"], outputs=["out.css"])
+    @task(inputs=["src/*.css"], outputs=["out.css"])
     def css() -> None:
         ran.append(True)
 
@@ -140,7 +140,7 @@ def test_force_ignores_staleness(project: Path):
 
     ran = []
 
-    @recipe(inputs=["in.css"], outputs=["out.css"])
+    @task(inputs=["in.css"], outputs=["out.css"])
     def css() -> None:
         ran.append(True)
 
@@ -152,7 +152,7 @@ def test_force_ignores_staleness(project: Path):
 def test_missing_output_is_always_stale(project: Path):
     (project / "in.css").write_text("a")
 
-    @recipe(inputs=["in.css"], outputs=["never-built.css"])
+    @task(inputs=["in.css"], outputs=["never-built.css"])
     def css() -> None: ...
 
     with context(root=project):
@@ -170,19 +170,19 @@ def test_parallel_prerequisites_all_run():
         with lock:
             seen.append(name)
 
-    @recipe
+    @task
     def one() -> None:
         note("one")
 
-    @recipe
+    @task
     def two() -> None:
         note("two")
 
-    @recipe
+    @task
     def three() -> None:
         note("three")
 
-    @recipe(needs=[one, two, three])
+    @task(needs=[one, two, three])
     def all_of_them() -> None: ...
 
     started = time.monotonic()
@@ -197,11 +197,11 @@ def test_parallel_prerequisites_all_run():
 def test_a_failing_prerequisite_stops_the_run():
     ran = []
 
-    @recipe
+    @task
     def broken() -> None:
         raise RuntimeError("nope")
 
-    @recipe(needs=[broken])
+    @task(needs=[broken])
     def after() -> None:
         ran.append(True)
 

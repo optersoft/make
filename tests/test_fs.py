@@ -2,7 +2,7 @@
 
 A dry run that suppresses every command while still mutating the working
 directory is worse than none, because it looks safe. This was found for real:
-the first end-to-end dry run of a dev-server recipe rewrote a repo's generated
+the first end-to-end dry run of a dev-server task rewrote a repo's generated
 stylesheet manifest from a `cargo metadata` call that had itself been skipped.
 """
 

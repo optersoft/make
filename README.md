@@ -1,12 +1,12 @@
 # make
 
-A command runner whose recipes are Python.
+A command runner whose tasks are Python.
 
 ```python
 # Makefile.py
-from make import recipe, sh
+from make import task, sh
 
-@recipe(group="app", requires=["cargo"])
+@task(group="app", requires=["cargo"])
 def test(*, fast: bool = False) -> None:
     """Run the test suite."""
     sh("cargo", "test", *(["--lib"] if fast else []))
@@ -18,7 +18,7 @@ $ cargo test --lib
 ```
 
 The command line is derived from the function signature, so there is no second
-schema to keep in sync. Recipes are ordinary functions — importable,
+schema to keep in sync. Tasks are ordinary functions — importable,
 unit-testable, and **distributable as versioned packages** rather than a
 directory someone `git clone`d.
 
@@ -29,7 +29,7 @@ $ uv tool install mkrun          # installs one command: mk
 **Three names, deliberately different.** The PyPI distribution is `mkrun`, the
 import name is `make`, and the command is `mk` — all independent, the same way
 `pip install pillow` gives you `import PIL`. The distribution is not `make` or
-`mk` because both are taken by unrelated projects: a recipe file declaring
+`mk` because both are taken by unrelated projects: a task file declaring
 `dependencies = ["make"]` gets a jinja2 templating tool, and `["mk"]` gets a
 different task runner.
 
@@ -48,17 +48,17 @@ $ alias make=mk
 ## Why
 
 `just` is a good dispatcher wrapped around a language that recipes outgrow. Once
-a recipe body has a loop, an `if`, or three variables that must agree, you are
+a task body has a loop, an `if`, or three variables that must agree, you are
 writing shell inside string interpolation with no types, no tests, and no way to
 share it except copying a file.
 
 |  | `just` | `make` |
 |---|---|---|
-| Recipe body | bash, with `{{ }}` spliced in **as text** | Python; values are values |
+| Task body | bash, with `{{ }}` spliced in **as text** | Python; values are values |
 | Arguments | positional strings | typed, from the signature — `int`, `Path`, `Literal`, `list[str]` |
 | Required input | omit the default so it becomes a *parse error* | declared, with an error naming the field and where to set it |
 | Namespacing | one flat namespace, `web-`/`box-` prefixes by convention | modules: `web.start`, `box.ls` |
-| Overriding a shared recipe | impossible — duplicates are fatal | `@recipe(override="web.start")`, and `abstract=True` upstream |
+| Overriding a shared task | impossible — duplicates are fatal | `@task(override="web.start")`, and `abstract=True` upstream |
 | Sharing | `git clone --depth 1` into a gitignored directory | a PyPI (or git) dependency, resolved and locked by uv |
 | Pinning | none — every checkout is on some HEAD | `mk --sync` → a lockfile |
 | Testing | `just --fmt --check` (it parses) | `pytest`, with a command recorder |
@@ -73,7 +73,7 @@ small functions, and all of them are tests now.
 `docs/why.md` names them, one by one, with the commits. Migrating, including the
 full translation table: `docs/from-just.md`.
 
-## Recipes
+## Tasks
 
 ### Arguments come from the signature
 
@@ -82,9 +82,9 @@ Parameters **before `*`** are positional; parameters **after `*`** are options.
 ```python
 from pathlib import Path
 from typing import Literal
-from make import recipe, sh
+from make import task, sh
 
-@recipe
+@task
 def publish(bundle: Path, *, track: Literal["alpha", "prod"] = "alpha",
             locale: list[str] = [], dry: bool = False) -> None:
     """Upload a bundle to the store."""
@@ -118,10 +118,10 @@ from make import arg
 def serve(*, port: Annotated[int, arg("-p", help="dev port", env="DEV_PORT")] = 8001): ...
 ```
 
-### Options on `@recipe`
+### Options on `@task`
 
 ```python
-@recipe(
+@task(
     group="play",           # namespace -> play.publish
     needs=[build, sign],    # run first, once per invocation
     requires=["fastlane"],  # must be on PATH; checked before anything runs
@@ -130,8 +130,8 @@ def serve(*, port: Annotated[int, arg("-p", help="dev port", env="DEV_PORT")] = 
     outputs=["dist/app"],
     aliases=["ship"],
     abstract=False,         # declared but unimplemented; a consumer must override
-    override=False,         # True, or the full name of the recipe being replaced
-    keep_cwd=False,         # run where the user stood, not at the recipe-file root
+    override=False,         # True, or the full name of the task being replaced
+    keep_cwd=False,         # run where the user stood, not at the task-file root
 )
 ```
 
@@ -156,7 +156,7 @@ steers later logic.
 ### Changing files
 
 A dry run that suppresses every command but still writes files looks safe and
-is not. Use `fs` wherever a recipe changes something:
+is not. Use `fs` wherever a task changes something:
 
 ```python
 from make import fs
@@ -185,7 +185,7 @@ class Web:
     watch: list[str] = field(default_factory=list)
 ```
 
-Consumers set it from the recipe file, a config file, or the environment — last
+Consumers set it from the task file, a config file, or the environment — last
 wins:
 
 ```python
@@ -218,7 +218,7 @@ checkout's name even from inside a linked worktree — the failure mode where a
 worktree silently starts with no application environment at all. `~/.just/` is
 read too, so an existing setup keeps working.
 
-## Sharing recipes
+## Sharing tasks
 
 This is the point. Declare dependencies inline (PEP 723):
 
@@ -226,10 +226,10 @@ This is the point. Declare dependencies inline (PEP 723):
 # Makefile.py
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["mkrun>=0.1", "acme-recipes>=0.4"]
+# dependencies = ["mkrun>=0.2", "acme-tasks>=0.4"]
 # ///
-from make import recipe, sh
-from acme_recipes import deploy, docker      # importing registers deploy.* and docker.*
+from make import task, sh
+from acme_tasks import deploy, docker       # importing registers deploy.* and docker.*
 
 deploy.Deploy.configure(host="app.example.com", unit="acme-web")
 ```
@@ -250,10 +250,10 @@ Otherwise `make` re-executes itself under `uv run`, into a cached environment.
 In a project that already has a `pyproject.toml` and a virtualenv, put the
 dependencies there instead and `mk --sync` runs `uv sync`.
 
-Publishing a recipe package is publishing a wheel. Nothing about it is special:
+Publishing a task package is publishing a wheel. Nothing about it is special:
 
 ```python
-# acme_recipes/__init__.py
+# acme_tasks/__init__.py
 from make import group, sh
 
 docker = group("docker")
@@ -266,21 +266,21 @@ def build(*, tag: str = "latest") -> None:
 
 ### Where a package comes from
 
-A registry is not the only answer, and often not the right one: recipes that
+A registry is not the only answer, and often not the right one: tasks that
 wrap *your* tool belong in the repository that builds it, so the tool and the
-recipe that drives it change in one commit. Name the source and uv fetches it —
+task that drives it change in one commit. Name the source and uv fetches it —
 the same two forms cargo offers:
 
 ```python
 # /// script
-# dependencies = ["mkrun>=0.1", "acme-recipes>=0.4"]
+# dependencies = ["mkrun>=0.2", "acme-tasks>=0.4"]
 #
 # [tool.uv.sources]
-# acme-recipes = { git = "ssh://git@github.com/acme/tool.git", subdirectory = "make" }
+# acme-tasks = { git = "ssh://git@github.com/acme/tool.git", subdirectory = "make" }
 # ///
 ```
 
-`mk --sync --add acme-recipes --git ssh://…` writes that for you, and
+`mk --sync --add acme-tasks --git ssh://…` writes that for you, and
 `mk --doctor` prints where each package actually resolved from — a source is the
 one thing about a dependency you cannot see by reading the file.
 
@@ -291,17 +291,17 @@ checkout without touching the committed file — cargo's `[patch]`:
 # .make/sources.toml, gitignored. ~/.make/sources.toml covers every repo at
 # once; relative paths resolve against the repo root either way.
 [sources]
-acme-recipes = { path = "../tool/make" }
+acme-tasks = { path = "../tool/make" }
 ```
 
 An override is local by definition, so nothing is written to the lockfile while
 one is in force — a path pins no commit.
 
-## Testing recipes
+## Testing tasks
 
 ```python
 from make.testing import record
-from acme_recipes import web
+from acme_tasks import web
 
 def test_start_reaps_a_stale_lock_holder():
     with record(responses={"lsof -t": "4711"}) as rec:
@@ -311,25 +311,25 @@ def test_start_reaps_a_stale_lock_holder():
 ```
 
 `record()` captures every command instead of running it, answers `sh.out()` with
-canned text, and reports declared tools as present. Recipes called from Python
+canned text, and reports declared tools as present. Tasks called from Python
 are plain functions — `needs=`, the confirmation gate and staleness belong to the
 runner, not the function.
 
 ## Command line
 
 ```
-mk [options] <recipe> [arguments] [<recipe> [arguments] ...]
+mk [options] <task> [arguments] [<task> [arguments] ...]
 
--l, --list             list recipes (the default with no recipe)
--h, --help [RECIPE]    help, or full help for one recipe
+-l, --list             list tasks (the default with no task)
+-h, --help [RECIPE]    help, or full help for one task
 -n, --dry-run          print commands instead of running them
--y, --yes              pre-answer confirmations for dangerous recipes
+-y, --yes              pre-answer confirmations for dangerous tasks
 -f, --force            ignore inputs=/outputs= staleness
 -j, --jobs N           run independent prerequisites in parallel
 -q, --quiet            only errors
 -v, --verbose          more detail (repeatable)
--C, --cwd DIR          change directory before finding the recipe file
--F, --file PATH        use this recipe file
+-C, --cwd DIR          change directory before finding the task file
+-F, --file PATH        use this task file
 -e, --env KEY=VALUE    set a variable for every command
     --json             machine-readable --list
     --doctor           every declared tool, and where each package resolved from
@@ -339,7 +339,7 @@ mk [options] <recipe> [arguments] [<recipe> [arguments] ...]
     --completions SH   bash | zsh | fish
 ```
 
-Recipe files, searched from the current directory upward: `Makefile.py`,
+Task files, searched from the current directory upward: `Makefile.py`,
 `makefile.py`, `mk.py`, `.make/main.py`. Not `make.py` — that name can shadow
 `import make`. (A `make/` *directory* is fine: namespace packages rank below
 installed ones, so it cannot shadow anything.)
@@ -347,13 +347,13 @@ installed ones, so it cannot shadow anything.)
 ## Repository layout
 
 `src/` is this tool. `optersoft/` is a second, separate distribution —
-`optersoft-make`, the author's own fleet recipes — kept here as a uv workspace
-member so a change to the runner is tested against real recipes in the same
+`optersoft-make`, the author's own fleet tasks — kept here as a uv workspace
+member so a change to the runner is tested against real tasks in the same
 commit. It is excluded from the `mkrun` sdist and wheel; installing this tool
 never installs it.
 
 That directory is named after its *owner*, not after this repository, because
-that is the convention the tool encourages: a project ships its recipes in its
+that is the convention the tool encourages: a project ships its tasks in its
 own `make/` directory, as `<project>-make`, and consumers name the source.
 `hetzner-make` (the `box` group, beside the `hetzner-box` CLI it wraps) is the
 first one; `optersoft-make` is what is left once every group that belongs to a
@@ -361,8 +361,8 @@ project has gone to live there.
 
 ## Status
 
-Alpha. The recipe-authoring API — `@recipe`, `sh`, `fs`, `config`, `env` — is
-what a private fleet of seven recipe groups is already built on, and is not
+Alpha. The task-authoring API — `@task`, `sh`, `fs`, `config`, `env` — is
+what a private fleet of seven task groups is already built on, and is not
 expected to change shape. The internals may.
 
 Issues are welcome; there is no support guarantee.

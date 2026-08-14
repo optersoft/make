@@ -1,6 +1,6 @@
 """The per-run context, and the terminal output built on top of it.
 
-`ctx` is a module-level proxy rather than a value you pass around: recipes call
+`ctx` is a module-level proxy rather than a value you pass around: tasks call
 `sh()` several layers deep, and threading a context object through every helper
 is exactly the kind of ceremony this tool exists to remove. The real object
 lives in a `ContextVar`, so `-j` worker threads and nested runs each see their
@@ -21,21 +21,21 @@ from typing import Any
 
 @dataclass(frozen=True)
 class Context:
-    """Everything a recipe needs to know about *how* it is being run."""
+    """Everything a task needs to know about *how* it is being run."""
 
     root: Path
-    """Directory holding the recipe file. Recipes run with this as cwd."""
+    """Directory holding the task file. Tasks run with this as cwd."""
 
     invocation_dir: Path
     """Where the user actually typed the command."""
 
-    recipe_file: Path | None = None
+    task_file: Path | None = None
 
     dry_run: bool = False
     """`sh()` prints instead of executing. A real dry run, not text expansion."""
 
     yes: bool = False
-    """Pre-answer confirmation prompts for `dangerous=True` recipes."""
+    """Pre-answer confirmation prompts for `dangerous=True` tasks."""
 
     force: bool = False
     """Ignore `inputs=`/`outputs=` staleness and run anyway."""
@@ -50,7 +50,7 @@ class Context:
     """Extra environment layered onto every `sh()` call (see `make.env`)."""
 
     _memo: dict[str, Any] = field(default_factory=dict, repr=False)
-    """Per-run memo of already-satisfied `needs=`, keyed by recipe full name."""
+    """Per-run memo of already-satisfied `needs=`, keyed by task full name."""
 
     def with_(self, **changes: Any) -> Context:
         return replace(self, **changes)
@@ -104,11 +104,11 @@ ctx = _ContextProxy()
 
 
 def path(*parts: str | Path) -> Path:
-    """Resolve a repo-relative path against the recipe-file root.
+    """Resolve a repo-relative path against the task-file root.
 
-    The runner runs recipes with the root as cwd, so a bare relative path
-    usually works -- but a recipe imported and called as a plain function from
-    somewhere else has no such guarantee. Recipes that touch the filesystem
+    The runner runs tasks with the root as cwd, so a bare relative path
+    usually works -- but a task imported and called as a plain function from
+    somewhere else has no such guarantee. Tasks that touch the filesystem
     should go through this, so they behave the same either way.
 
     An absolute path is returned unchanged.

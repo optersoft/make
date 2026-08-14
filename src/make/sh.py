@@ -6,7 +6,7 @@ The default form takes an argv *list*, never a string:
 
 There is no string interpolation step, so a value containing a space, a quote or
 a `$` is data and cannot become syntax. `just`'s `{{ }}` splices text into bash
-source before the shell parses it, which is why its recipes are littered with
+source before the shell parses it, which is why its tasks are littered with
 manual `quote()` calls and defensive double-quoting. Here the hazard is absent
 by construction, and a shell is only involved when you explicitly ask for one
 via `sh.pipe()` / `sh.bash()`.
@@ -139,7 +139,7 @@ class _Sh:
         except FileNotFoundError as exc:
             raise ToolMissing(
                 f"{argv[0]!r} is not on PATH",
-                hint="declare it with @recipe(requires=[...]) so this fails before "
+                hint="declare it with @task(requires=[...]) so this fails before "
                 "anything else runs, or install it first",
             ) from exc
 
@@ -178,7 +178,7 @@ class _Sh:
         `dry` is the answer under --dry-run. It defaults to True because most
         uses are presence checks ("is this tool installed") where assuming yes
         keeps the dry run going. Pass `dry=False` when a True would make the
-        recipe report work it would not actually do -- `sh.ok("lsof", ...)`
+        task report work it would not actually do -- `sh.ok("lsof", ...)`
         deciding that a port is busy, for instance.
         """
         kwargs.setdefault("echo_cmd", False)
@@ -199,7 +199,7 @@ class _Sh:
     def bash(self, script: str, *, strict: bool = True, **kwargs: Any) -> Result:
         """Run a multi-line bash script, `set -euo pipefail` by default.
 
-        Mostly a migration aid: it lets a `just` recipe body move across
+        Mostly a migration aid: it lets a `just` task body move across
         verbatim so behaviour can be compared, then be dismantled into typed
         Python one piece at a time.
         """
