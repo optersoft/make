@@ -13,7 +13,7 @@ def test(*, fast: bool = False) -> None:
 ```
 
 ```console
-$ make app.test --fast
+$ mk app.test --fast
 $ cargo test --lib
 ```
 
@@ -23,18 +23,25 @@ unit-testable, and **distributable as versioned packages** rather than a
 directory someone `git clone`d.
 
 ```console
-$ uv tool install mkrun          # installs the `make` and `mk` commands
+$ uv tool install mkrun          # installs one command: mk
 ```
 
-**Three names, deliberately different.** The PyPI distribution is `mkrun`,
-because both `make` and `mk` are taken by unrelated projects — and a recipe file
-declaring `dependencies = ["make"]` would silently install a jinja2 templating
-tool. The import name is `make` and the commands are `make` and `mk`, which are
-independent of the distribution name (the same way `pip install pillow` gives
-you `import PIL`).
+**Three names, deliberately different.** The PyPI distribution is `mkrun`, the
+import name is `make`, and the command is `mk` — all independent, the same way
+`pip install pillow` gives you `import PIL`. The distribution is not `make` or
+`mk` because both are taken by unrelated projects: a recipe file declaring
+`dependencies = ["make"]` gets a jinja2 templating tool, and `["mk"]` gets a
+different task runner.
 
-`make` shadows GNU make on `PATH`. That is deliberate; `mk` is the identical
-alias for repos that also use a real `Makefile`.
+**Nothing installs a `make` command.** That would shadow GNU make on the `PATH`
+of essentially every Unix machine — a large thing to take from someone who
+installed a task runner for one repository. `mk` is not a builtin or a default
+alias in bash, zsh or PowerShell, and it is three characters shorter to type.
+If you want the old spelling anyway, it is one line in your shell profile:
+
+```console
+$ alias make=mk
+```
 
 ---
 
@@ -53,7 +60,7 @@ share it except copying a file.
 | Namespacing | one flat namespace, `web-`/`box-` prefixes by convention | modules: `web.start`, `box.ls` |
 | Overriding a shared recipe | impossible — duplicates are fatal | `@recipe(override="web.start")`, and `abstract=True` upstream |
 | Sharing | `git clone --depth 1` into a gitignored directory | a PyPI (or git) dependency, resolved and locked by uv |
-| Pinning | none — every checkout is on some HEAD | `make --sync` → a lockfile |
+| Pinning | none — every checkout is on some HEAD | `mk --sync` → a lockfile |
 | Testing | `just --fmt --check` (it parses) | `pytest`, with a command recorder |
 | Dry run | text expansion | every command actually suppressed |
 
@@ -86,8 +93,8 @@ def publish(bundle: Path, *, track: Literal["alpha", "prod"] = "alpha",
 ```
 
 ```console
-$ make publish ./app.aab --track prod --locale es-ES --locale en-US
-$ make publish --help
+$ mk publish ./app.aab --track prod --locale es-ES --locale en-US
+$ mk publish --help
 ```
 
 | Signature | Command line |
@@ -192,7 +199,7 @@ port = 8005
 ```
 
 ```console
-$ MAKE_WEB_PORT=8105 make web.start
+$ MAKE_WEB_PORT=8105 mk web.start
 ```
 
 A missing required value fails with the field, its type, and all three places it
@@ -228,9 +235,9 @@ deploy.Deploy.configure(host="app.example.com", unit="acme-web")
 ```
 
 ```console
-$ make --sync              # pin -> Makefile.py.lock, committed
-$ make --sync --upgrade    # move the pins, deliberately, as a reviewable diff
-$ make web.start
+$ mk --sync              # pin -> Makefile.py.lock, committed
+$ mk --sync --upgrade    # move the pins, deliberately, as a reviewable diff
+$ mk web.start
 ```
 
 Without `--upgrade`, an existing lock is respected: a repo stays on the version
@@ -241,7 +248,7 @@ whatever `HEAD` happens to be.
 If the current interpreter already satisfies the dependencies, nothing happens.
 Otherwise `make` re-executes itself under `uv run`, into a cached environment.
 In a project that already has a `pyproject.toml` and a virtualenv, put the
-dependencies there instead and `make --sync` runs `uv sync`.
+dependencies there instead and `mk --sync` runs `uv sync`.
 
 Publishing a recipe package is publishing a wheel. Nothing about it is special:
 
@@ -322,4 +329,17 @@ Alpha. The recipe-authoring API — `@recipe`, `sh`, `fs`, `config`, `env` — i
 what a private fleet of seven recipe groups is already built on, and is not
 expected to change shape. The internals may.
 
-MIT.
+Issues are welcome; there is no support guarantee.
+
+## License
+
+Licensed under either of [MIT](LICENSE-MIT) or
+[Apache-2.0](LICENSE-APACHE), at your option — the pair `uv` itself ships
+under. Take whichever your organisation prefers: MIT is the shorter read,
+Apache-2.0 carries an express patent grant and an explicit trademark
+reservation.
+
+Unless you state otherwise, any contribution you submit for inclusion is
+dual-licensed on those same terms, with no additional conditions.
+
+Copyright © 2026 Optersoft, S.L.

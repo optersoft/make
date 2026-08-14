@@ -90,7 +90,7 @@ def test_an_override_takes_over_the_targets_identity():
     """A consumer writes `def test_gate()`, but the recipe is still `play.test-gate`.
 
     Otherwise the replacement occupies the right slot while listing itself under
-    a different name -- so `make --list` and `needs=` disagree with what
+    a different name -- so `mk --list` and `needs=` disagree with what
     actually runs.
     """
 

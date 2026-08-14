@@ -11,7 +11,7 @@ Migration is incremental and reversible: add a `Makefile.py`, keep the
 ```make
 # justfile -- unchanged names, new implementation
 web-start *ARGS:
-    @make web.start {{ ARGS }}
+    @mk web.start {{ ARGS }}
 ```
 
 Retire a group from the justfile only once its `make` version has run for a
@@ -25,10 +25,10 @@ working.
 | `some_var := "value"` before an `import?` | `SomeConfig.configure(some_var="value")` |
 | `import? '.just-shared/web.just'` | `from your_recipe_package import web` |
 | `just _shared` | nothing — it is a dependency |
-| (no equivalent) | `make --sync` to pin, `make --sync --upgrade` to move the pin |
-| `just --list` | `make` or `make --list` |
-| `just -n <recipe>` | `make -n <recipe>` (a real dry run) |
-| `just --fmt --check` | `make dev.test` |
+| (no equivalent) | `mk --sync` to pin, `mk --sync --upgrade` to move the pin |
+| `just --list` | `make` or `mk --list` |
+| `just -n <recipe>` | `mk -n <recipe>` (a real dry run) |
+| `just --fmt --check` | `mk dev.test` |
 | `[group('web')]` + a `web-` name prefix | `group="web"`, so `web.start` |
 | `[private]` | `hidden=True`, or a leading underscore |
 | `alias b := a` | `aliases=["b"]` |
@@ -41,7 +41,7 @@ working.
 | `env_var_or_default('X', y)` | `env.get("X", y)` |
 | a `for f in ~/.just/…; do set -a; . "$f"; set +a; done` loop | `env.layered()` |
 | `source_directory()` | `Path(__file__).parent` |
-| `just -f other.just <recipe>` | `make -F other/Makefile.py <recipe>` |
+| `just -f other.just <recipe>` | `mk -F other/Makefile.py <recipe>` |
 
 ## What `just` still does better
 

@@ -182,9 +182,28 @@ def test_doctor_reports_a_missing_tool(repo: Path, capsys, monkeypatch):
     assert "definitely-not-installed" in capsys.readouterr().err
 
 
+def test_the_only_installed_command_is_mk():
+    """Installing this must never shadow GNU make.
+
+    A `make` console script lands in ~/.local/bin and wins over /usr/bin/make on
+    the PATH of essentially every Unix machine -- a large thing to take from
+    someone who installed a task runner for one repository. The import name is
+    still `make`; only the command is not.
+    """
+    import importlib.metadata as md
+
+    entry_points = md.distribution("mkrun").entry_points
+    assert {e.name for e in entry_points if e.group == "console_scripts"} == {"mk"}
+
+
 def test_completions_are_emitted(repo: Path, capsys):
     assert main(["--completions", "zsh"]) == 0
-    assert "#compdef make mk" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "#compdef mk" in out
+    # Completing `make` would offer these recipes to someone building a C
+    # project. The script says how to opt in; it must not do it for you.
+    assert "#compdef make" not in out
+    assert "compdef _mk make" in out, "the opt-in line for an alias should still be documented"
 
 
 def test_error_in_a_recipe_points_at_the_user_file(repo: Path, capsys):

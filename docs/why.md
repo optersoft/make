@@ -102,7 +102,7 @@ what version a given checkout is on.
 # ///
 ```
 
-`make --sync` writes a lockfile. Upgrading is a version bump in a diff.
+`mk --sync` writes a lockfile. Upgrading is a version bump in a diff.
 
 ## 5. The same logic is written three times
 

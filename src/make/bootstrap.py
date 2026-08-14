@@ -17,7 +17,7 @@ If the current interpreter already satisfies them, nothing happens -- that is
 the common case in a project with a synced virtualenv, and it costs one
 `importlib.metadata` lookup per dependency. Otherwise `make` re-executes itself
 under `uv run`, which resolves into a cached environment. Pin it with
-`make --sync` (`uv lock --script`).
+`mk --sync` (`uv lock --script`).
 
 The satisfaction check errs toward re-executing: a specifier it cannot parse
 counts as unsatisfied. Being needlessly slow is recoverable; running a recipe
@@ -27,7 +27,7 @@ A recipe package can also come from the repository that owns it, declared the
 way the Rust crates here declare each other:
 
     # [tool.uv.sources]
-    # hetzner-recipes = { path = "../hetzner/recipes" }
+    # hetzner-make = { path = "../hetzner/make" }
 
 That table is only visible to `uv sync --script`, which reads the file --
 `uv run --with` builds an environment from bare requirements and never opens it.
@@ -211,7 +211,7 @@ def needs_bootstrap(metadata: ScriptMetadata) -> bool:
         return False
     if metadata.sources:
         # A source moves the *where* out of the requirement, so what is left is
-        # a bare `hetzner-recipes>=0.1` that an already-installed copy would
+        # a bare `hetzner-make>=0.1` that an already-installed copy would
         # satisfy -- from PyPI, or from the wrong checkout. The version check
         # cannot see the difference, so it does not get to decide.
         debug("bootstrap: the recipe file declares [tool.uv.sources]")
@@ -300,7 +300,7 @@ def read_overrides(root: Path) -> dict[str, dict]:
 
     A relative `path` resolves against the *repo root*, not against the file it
     was written in, so one line in `~/.make/sources.toml` --
-    `hetzner-recipes = { path = "../hetzner/recipes" }` -- is correct from
+    `hetzner-make = { path = "../hetzner/make" }` -- is correct from
     inside every sibling checkout.
     """
     import tomllib
@@ -318,7 +318,7 @@ def read_overrides(root: Path) -> dict[str, dict]:
             if not isinstance(spec, dict) or "path" not in spec:
                 raise MakeError(
                     f"{file}: source for {name!r} must be a table with a `path`",
-                    hint='  [sources]\n  hetzner-recipes = { path = "../hetzner/recipes" }',
+                    hint='  [sources]\n  hetzner-make = { path = "../hetzner/make" }',
                 )
             resolved = Path(spec["path"]).expanduser()
             if not resolved.is_absolute():
@@ -405,7 +405,7 @@ def script_interpreter(path: Path, uv: str) -> str | None:
     This is the only path that reads the script's own metadata, so it is the
     only one where `[tool.uv.sources]` means anything -- `uv run --with` builds
     an environment from bare requirements and never opens the file. It is also
-    what makes `make --sync` real: without it the lockfile would be decorative,
+    what makes `mk --sync` real: without it the lockfile would be decorative,
     which is worse than no lockfile at all.
 
     Returns None whenever anything is off (sync failed, the environment somehow
@@ -473,7 +473,7 @@ def reexec(metadata: ScriptMetadata, argv: list[str], recipe_file: Path | None =
                 # file names -- a different package with the same name.
                 raise MakeError(
                     f"could not build the environment for {script.name}",
-                    hint=f"run `uv sync --script {script}` to see why; `make -v` shows the command",
+                    hint=f"run `uv sync --script {script}` to see why; `mk -v` shows the command",
                 )
 
     command = [uv, "run", "--quiet"]

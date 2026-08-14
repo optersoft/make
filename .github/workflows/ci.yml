@@ -39,7 +39,7 @@ jobs:
       # enforces the budget; this prints the number so a regression is visible
       # in the log before it fails the build.
       - name: Startup latency
-        run: uv run make dev.bench
+        run: uv run mk dev.bench
 
   # A consumer takes a package from the repo that owns it, so the thing most
   # likely to break is not covered above: this workspace resolving against a

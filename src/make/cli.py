@@ -7,9 +7,9 @@ an optional positional, or with `*args`, keeps consuming.
 
 That rule is chosen for predictability over convenience: a value is never
 silently reinterpreted as the next recipe just because it happens to share a
-name with one. `make copy a.txt web.stop` copies to a directory called
+name with one. `mk copy a.txt web.stop` copies to a directory called
 `web.stop`, exactly as the signature says it should; to chain, fill the slots
-(`make copy a.txt . web.stop`) or run the two commands separately.
+(`mk copy a.txt . web.stop`) or run the two commands separately.
 """
 
 from __future__ import annotations
@@ -27,9 +27,9 @@ from .recipes import Recipe, registry
 from .runner import Invocation, run
 
 GLOBAL_HELP = """\
-make -- a command runner whose recipes are Python
+mk -- a command runner whose recipes are Python
 
-usage: make [options] <recipe> [arguments] [<recipe> [arguments] ...]
+usage: mk [options] <recipe> [arguments] [<recipe> [arguments] ...]
 
 options:
   -l, --list             list recipes (the default with no recipe)
@@ -169,7 +169,7 @@ def _parse_global(argv: list[str]) -> tuple[_Options, list[str]]:
             options.color = True
         else:
             raise UsageError(
-                f"unknown option {name}", hint="global options come before the recipe name; run `make --help`"
+                f"unknown option {name}", hint="global options come before the recipe name; run `mk --help`"
             )
         index += 1
     return options, argv[index:]

@@ -131,7 +131,7 @@ def test_docstring_becomes_summary_and_description(registry):
     def build() -> None:
         """Build the app.
 
-        The long form, which shows up in `make --help build`.
+        The long form, which shows up in `mk --help build`.
 
         Args:
             unused: ignored

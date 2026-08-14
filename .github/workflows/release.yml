@@ -46,7 +46,7 @@ jobs:
       - name: The sdist contains only the tool
         run: |
           unexpected="$(tar tzf dist/*.tar.gz | sed 's|^[^/]*/||' \
-            | grep -vE '^(src/make/|tests/|README.md|LICENSE|pyproject.toml|PKG-INFO|\.gitignore|$)' || true)"
+            | grep -vE '^(src/make/|tests/|README.md|LICENSE-(MIT|APACHE)|pyproject.toml|PKG-INFO|\.gitignore|$)' || true)"
           if [ -n "$unexpected" ]; then
             echo "unexpected files in the sdist:" >&2; echo "$unexpected" >&2; exit 1
           fi

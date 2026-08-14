@@ -173,7 +173,7 @@ class Registry:
             if key not in self._recipes:
                 raise RecipeError(
                     f"{item.location}: override={target!r} does not match any recipe",
-                    hint="the upstream recipe may have been renamed; run `make --list` to see what exists",
+                    hint="the upstream recipe may have been renamed; run `mk --list` to see what exists",
                 )
             replaced = self._recipes[key]
             item.override = False
@@ -232,7 +232,7 @@ class Registry:
 
         candidates = list(self._recipes) + list(self._aliases)
         close = difflib.get_close_matches(normalize(name), candidates, n=3, cutoff=0.5)
-        hint = f"did you mean: {', '.join(close)}?" if close else "run `make --list` to see them all"
+        hint = f"did you mean: {', '.join(close)}?" if close else "run `mk --list` to see them all"
         raise UsageError(f"no recipe named {name!r}", hint=hint)
 
     def all(self, *, include_hidden: bool = False) -> list[Recipe]:

@@ -8,7 +8,7 @@
         \"\"\"Run the test suite.\"\"\"
         sh("cargo", "test", *(["--lib"] if fast else []))
 
-    $ make app.test --fast
+    $ mk app.test --fast
 
 The command line comes from the signature, so there is no second schema to keep
 in sync. Recipes are ordinary functions: importable, unit-testable, and

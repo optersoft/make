@@ -6,7 +6,7 @@ keyword-only in the signature, an option on the command line:
     def publish(path: Path, *, track: Literal["alpha", "prod"] = "alpha",
                 dry: bool = False, locale: list[str] = []) -> None:
 
-    make publish ./app.aab --track prod --locale es-ES --locale en-US --dry
+    mk publish ./app.aab --track prod --locale es-ES --locale en-US --dry
 
 There is no second schema to keep in sync with the function, which is the class
 of drift that makes a `just` variable and the recipe that reads it disagree.
