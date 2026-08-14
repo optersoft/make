@@ -16,11 +16,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --all-extras
+      # --all-packages reaches the recipes/ workspace member. pytest collects its
+      # suite too, so without it the verify step below fails on import rather
+      # than on anything about the release.
+      - run: uv sync --all-extras --all-packages
       - name: Verify before shipping
         run: |
-          uv run ruff check src tests Makefile.py
-          uv run ruff format --check src tests Makefile.py
+          uv run ruff check src tests Makefile.py recipes/src recipes/tests recipes/examples
+          uv run ruff format --check src tests Makefile.py recipes/src recipes/tests recipes/examples
           uv run pytest
       - name: Check the tag matches the version
         run: |
@@ -31,9 +34,15 @@ jobs:
             exit 1
           fi
         if: startsWith(github.ref, 'refs/tags/v')
-      - run: uv build
+      # Named explicitly: this repository is a workspace whose other member is a
+      # private recipe package, and dist/ is uploaded to PyPI wholesale below.
+      # A bare `uv build` builds the root today, but nothing in that sentence is
+      # a guarantee worth resting the upload on.
+      - run: uv build --package mkrun
       # The sdist must stay the tool alone: it defaulted to the whole project
-      # directory once and swept in a sibling package's sources.
+      # directory once and swept in the recipe package's sources -- which now
+      # live in this repository, at recipes/, so this check is the thing
+      # standing between a release and publishing them.
       - name: The sdist contains only the tool
         run: |
           unexpected="$(tar tzf dist/*.tar.gz | sed 's|^[^/]*/||' \
