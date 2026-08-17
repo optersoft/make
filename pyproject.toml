@@ -1,6 +1,6 @@
 [project]
 name = "mkrun"
-version = "0.3.0"
+version = "0.4.0"
 description = "A command runner whose tasks are Python functions -- shareable as versioned packages."
 readme = "README.md"
 requires-python = ">=3.11"
