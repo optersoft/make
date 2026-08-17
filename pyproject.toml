@@ -55,10 +55,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/make"]
 
-# An sdist defaults to the whole project directory, which here would ship
-# optersoft's own make package, the per-repo example configs and the
-# migration notes to anyone running `pip download mkrun`. This distribution is
-# the generic tool; the recipes are a separate one.
+# An sdist defaults to the whole project directory, which here would ship the
+# rust/ member to anyone running `pip download mkrun`. This distribution is
+# the runner; the task packages are separate ones.
 [tool.hatch.build.targets.sdist]
 only-include = [
     "src/make",
@@ -69,29 +68,25 @@ only-include = [
     "pyproject.toml",
 ]
 
-# Two distributions, one checkout: `mkrun` here at the root, and optersoft's
-# private make package in optersoft/. They are packaged separately -- see the
-# sdist rule above -- but resolved and locked together, so a runner change and
-# the recipes that exercise it land in one commit and one lockfile.
+# Two distributions, one checkout: `mkrun` here at the root, and the generic
+# cargo-hygiene package in rust/. They are packaged separately -- see the sdist
+# rule above -- but resolved and locked together, so a runner change and real
+# tasks that exercise it land in one commit and one lockfile. (optersoft's own
+# make package was the original second member; it moved to the private
+# optersoft/make-optersoft repo on 2026-08-17 so this repo can go public.)
 [tool.uv.workspace]
-members = ["optersoft"]
-
-# No source for `hetzner-make` here on purpose. It is an optional extra of the
-# optersoft member -- for the `box` shim only -- and pointing it at
-# ../hetzner/make would make this repository unbuildable without that sibling
-# checkout, which is exactly what CI and a fresh clone are. A consumer that
-# wants the group names its own source.
+members = ["rust"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "optersoft/tests"]
+testpaths = ["tests", "rust/tests"]
 addopts = "-q"
 
 [tool.ruff]
 line-length = 110
 target-version = "py311"
-# Both workspace members are first-party. Without optersoft/src here, ruff sorts
-# `optersoft_make` as a third-party import inside its own package.
-src = ["src", "optersoft/src"]
+# Both workspace members are first-party. Without rust/src here, ruff sorts
+# `make_rust` as a third-party import inside its own package.
+src = ["src", "rust/src"]
 
 [tool.ruff.lint.isort]
 # Paired with format.skip-magic-trailing-comma below; ruff warns if they disagree.
@@ -117,12 +112,6 @@ ignore = ["E501", "B008", "RUF012", "SIM117", "RUF022"]
 [tool.ruff.lint.per-file-ignores]
 # Tests deliberately redefine names to exercise duplicate-registration errors.
 # Both members' suites: patterns are matched against the path relative to this
-# file, so `tests/**` alone would not reach the optersoft package.
+# file, so `tests/**` alone would not reach the rust package.
 "tests/**" = ["F811", "B006"]
-"optersoft/tests/**" = ["F811", "B006"]
-# The examples are verbatim copies of files that live in other repositories,
-# where `make` is an ordinary third-party import. Here `src` marks it
-# first-party, so isort wants a different order in the copy than in the
-# original -- and the original is the one that has to be right. Keeping them
-# byte-identical is worth more than import grouping in a file nobody imports.
-"optersoft/examples/**" = ["I001"]
+"rust/tests/**" = ["F811", "B006"]

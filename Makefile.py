@@ -9,19 +9,19 @@ from pathlib import Path
 
 from make import note, sh, step, task, warn
 
-# Both workspace members, listed as Python paths rather than as `optersoft/`.
-# Ruff formats Python code blocks inside markdown too, and the whole directory
-# hands it docs/ -- where the examples are hand-packed to read as prose and
-# reformatting them is a docs edit disguised as a lint fix.
-SOURCES = ["src", "tests", "Makefile.py", "optersoft/src", "optersoft/tests", "optersoft/examples"]
+# Both workspace members, listed as Python paths rather than as directories.
+# Ruff formats Python code blocks inside markdown too, and handing it a whole
+# directory reaches docs/ -- where examples are hand-packed to read as prose
+# and reformatting them is a docs edit disguised as a lint fix.
+SOURCES = ["src", "tests", "Makefile.py", "rust/src", "rust/tests"]
 
 
 @task(group="dev", requires=["uv"])
 def sync() -> None:
     """Install both workspace members in editable mode.
 
-    `--all-packages` is what reaches optersoft/; a plain `uv sync` installs the
-    root project only, and then optersoft/tests fail on import rather than on
+    `--all-packages` is what reaches rust/; a plain `uv sync` installs the
+    root project only, and then rust/tests fail on import rather than on
     anything real.
 
     Also removes a stray `make` distribution. The import name is `make` but the
@@ -103,7 +103,7 @@ def build() -> None:
 
     `--package mkrun` names the package deliberately: a bare `uv build`
     happens to resolve to the root today, but `dist/` is uploaded wholesale,
-    and the `optersoft/` workspace member must never end up in it.
+    and the `rust/` workspace member releases on its own schedule, not mkrun's.
     """
     sh("uv", "build", "--package", "mkrun")
 

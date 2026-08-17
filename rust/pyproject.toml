@@ -1,0 +1,41 @@
+[project]
+name = "make-rust"
+version = "0.1.0"
+description = "Generic cargo hygiene tasks for mkrun -- find every target/ dir, report it, reclaim it."
+readme = "README.md"
+requires-python = ">=3.11"
+# Same dual licence as mkrun, for the same reason: this member is generic and
+# publishable. The licence texts live at the repository root; a built wheel
+# carries the SPDX expression, which is what PEP 639 asks for.
+license = "MIT OR Apache-2.0"
+authors = [{ name = "Optersoft, S.L.", email = "david@optersoft.com" }]
+keywords = ["cargo", "rust", "target", "clean", "sweep", "mk", "mkrun"]
+dependencies = ["mkrun>=0.3"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/make_rust"]
+
+[project.urls]
+Source = "https://github.com/optersoft/make/tree/main/rust"
+
+# The runner is the other half of this repository, so resolve it from the
+# working tree instead of PyPI: a change to `mkrun` is testable against real
+# tasks in the same commit that makes it. Consumers are unaffected -- a built
+# wheel carries the plain `mkrun>=0.3` requirement above, because
+# `tool.uv.sources` is workspace metadata and is not written into a distribution.
+[tool.uv.sources]
+mkrun = { workspace = true }
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+# No [tool.ruff] here on purpose: both members share the root config, so the
+# two cannot drift apart by an isort option the way separate copies once did.
