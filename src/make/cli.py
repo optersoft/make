@@ -225,7 +225,9 @@ def _print_list(*, as_json: bool) -> int:
                 "usage": item.usage,
                 "abstract": item.abstract,
                 "dangerous": item.dangerous,
-                "aliases": list(item.aliases),
+                # Every spelling that resolves here, not just the declared ones:
+                # a group alias adds `dx.start` without touching the task.
+                "aliases": registry.names_for(item)[1:],
                 "requires": list(item.requires),
                 "params": [
                     {
@@ -253,7 +255,11 @@ def _print_list(*, as_json: bool) -> int:
     width = min(width, 44)
     for group_name, group_items in registry.groups().items():
         echo()
-        echo(paint(group_name or "(ungrouped)", "bold", "magenta"))
+        heading = paint(group_name or "(ungrouped)", "bold", "magenta")
+        short = registry.group_aliases(group_name) if group_name else ()
+        if short:
+            heading += paint(f"  ({', '.join(short)})", "dim")
+        echo(heading)
         for item in group_items:
             signature = _signature(item)
             summary = item.summary
@@ -310,6 +316,10 @@ def _print_task_help(item: Task) -> int:
             echo(f"  {flags + suffix:<28} {default}")
             if param.help:
                 echo(f"  {'':<28} {paint(param.help, 'dim')}")
+    other_names = registry.names_for(item)[1:]
+    if other_names:
+        echo()
+        echo(paint("also called: ", "bold") + ", ".join(other_names))
     if item.needs:
         echo()
         echo(paint("runs first: ", "bold") + ", ".join(item.resolved_needs()))
@@ -489,9 +499,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         if options.names:
             for item in registry.all():
-                print(item.full_name)
-                for alias in item.aliases:
-                    print(alias)
+                for name in registry.names_for(item):
+                    print(name)
             return 0
         if options.doctor:
             return _doctor(task_file, metadata)

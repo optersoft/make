@@ -13,6 +13,11 @@ dictionary:
   definitions and their files.
 * **Namespaces.** Tasks live in modules, so `web.start` and `box.ls` need no
   `web-` / `box-` prefix convention and two packages cannot collide.
+* **Short names for a whole namespace.** `alias("dx", "dioxus")` -- or
+  `group("dioxus", alias="dx")` where the group is declared -- makes `dx.start`
+  resolve to `dioxus.start`, for every task in the group and any added later.
+  The alias is an input spelling only: `--list`, `--help`, `needs=` and every
+  error message keep saying `dioxus.start`, so nothing a reader sees is renamed.
 
 The decorator returns the original function untouched, with the task attached
 as an attribute. Importing a task and calling it from Python is therefore
@@ -24,6 +29,7 @@ from __future__ import annotations
 
 import inspect
 import re
+import sys
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -32,7 +38,7 @@ from typing import Any
 from .errors import TaskError, UsageError
 from .params import Param, build_params, render_usage
 
-__all__ = ["Group", "Task", "Registry", "group", "task", "registry"]
+__all__ = ["Group", "Task", "Registry", "alias", "group", "task", "registry"]
 
 _DOC_ARGS = re.compile(r"^\s*(?:Args|Arguments|Params|Parameters)\s*:\s*$", re.IGNORECASE)
 _DOC_ENTRY = re.compile(r"^\s{1,8}(?:\*{0,2})(\w+)\s*(?:\([^)]*\))?\s*:\s*(.+?)\s*$")
@@ -130,12 +136,19 @@ class Task:
         return f"<Task {self.full_name}>"
 
 
+#: What `snapshot()` hands to `restore()`: tasks, task aliases, group aliases,
+#: the aliases still to be checked, and the overrides still to be applied.
+_State = tuple[dict[str, Task], dict[str, str], dict[str, str], list[tuple[str, str, str]], list[Task]]
+
+
 class Registry:
     """Every task visible to this run."""
 
     def __init__(self) -> None:
         self._tasks: dict[str, Task] = {}
         self._aliases: dict[str, str] = {}
+        self._group_aliases: dict[str, str] = {}
+        self._declared_aliases: list[tuple[str, str, str]] = []
         self._overrides: list[Task] = []
         self._finalized = False
 
@@ -160,8 +173,70 @@ class Registry:
         self._finalized = False
         return item
 
+    def add_alias(self, name: str, target: str, *, where: str = "") -> None:
+        """Register `name` as a second spelling of a group, or of one task.
+
+        A dotted target is one task (`alias("ship", "play.publish")`); a bare one
+        is a group prefix, so every task in the group answers to it -- including
+        tasks added after the alias, which is why this stores a prefix rather
+        than expanding to the names that happen to exist right now.
+
+        Registered immediately so lookups work without a `finalize()`, but
+        *checked* there: a package declares its alias on the `group()` line,
+        before any of its tasks exist.
+        """
+        key = normalize(name)
+        goal = normalize(target)
+        if not key or not goal:
+            raise TaskError(f"alias({name!r}, {target!r}): both a name and a target are required")
+        if "." in key:
+            raise TaskError(
+                f"alias {name!r} cannot contain a dot",
+                hint="an alias is one name: alias('dx', 'dioxus') covers the whole group",
+            )
+        existing = self._aliases.get(key) or self._group_aliases.get(key)
+        if existing is not None and existing != goal:
+            raise TaskError(
+                f"alias {key!r} already means {existing!r}, so it cannot also mean {goal!r}"
+                + (f"\n  declared at {where}" if where else ""),
+                hint="pick a different alias, or drop one of the two declarations",
+            )
+        table = self._aliases if "." in goal else self._group_aliases
+        table[key] = goal
+        self._declared_aliases.append((key, goal, where))
+        self._finalized = False
+
+    def _check_aliases(self) -> None:
+        """Every alias points somewhere real, and shadows nothing."""
+        groups = {normalize(item.group) for item in self._tasks.values() if item.group}
+        for key, goal, where in self._declared_aliases:
+            at = f"\n  declared at {where}" if where else ""
+            if "." in goal:
+                if goal not in self._tasks:
+                    raise TaskError(
+                        f"alias {key!r} points at {goal!r}, which is not a task{at}",
+                        hint="run `mk --list` to see what exists",
+                    )
+                if key in self._tasks:
+                    raise TaskError(
+                        f"alias {key!r} would shadow the task of the same name{at}",
+                        hint=f"{self._tasks[key].location} defines it",
+                    )
+            else:
+                if goal not in groups:
+                    raise TaskError(
+                        f"alias {key!r} points at group {goal!r}, which has no tasks{at}",
+                        hint="the group may have been renamed; run `mk --list` to see what exists",
+                    )
+                if key in groups:
+                    raise TaskError(
+                        f"alias {key!r} is already a group name, so it can never resolve{at}",
+                        hint="pick an alias that is not a group",
+                    )
+        self._declared_aliases.clear()
+
     def finalize(self) -> None:
-        """Apply deferred overrides. Runs after the task file has been imported.
+        """Apply deferred overrides, then check the aliases. Runs after import.
 
         Deferred, because a consumer's `mk.py` imports the shared package (which
         registers the original) and then defines the replacement -- but the
@@ -188,14 +263,17 @@ class Registry:
             for alias in item.aliases:
                 self._aliases[normalize(alias)] = key
         self._overrides.clear()
+        self._check_aliases()
         self._finalized = True
 
     def clear(self) -> None:
         self._tasks.clear()
         self._aliases.clear()
+        self._group_aliases.clear()
+        self._declared_aliases.clear()
         self._overrides.clear()
 
-    def snapshot(self) -> tuple[dict[str, Task], dict[str, str], list[Task]]:
+    def snapshot(self) -> _State:
         """Capture the current contents, for `restore`.
 
         Registration happens at import time, and a module is imported once per
@@ -203,12 +281,20 @@ class Registry:
         otherwise permanently unregister every task for the rest of the run.
         Take a snapshot, clear, then restore.
         """
-        return dict(self._tasks), dict(self._aliases), list(self._overrides)
+        return (
+            dict(self._tasks),
+            dict(self._aliases),
+            dict(self._group_aliases),
+            list(self._declared_aliases),
+            list(self._overrides),
+        )
 
-    def restore(self, state: tuple[dict[str, Task], dict[str, str], list[Task]]) -> None:
-        tasks, aliases, overrides = state
+    def restore(self, state: _State) -> None:
+        tasks, aliases, group_aliases, declared, overrides = state
         self._tasks = dict(tasks)
         self._aliases = dict(aliases)
+        self._group_aliases = dict(group_aliases)
+        self._declared_aliases = list(declared)
         self._overrides = list(overrides)
 
     # -- lookup ------------------------------------------------------------
@@ -216,13 +302,33 @@ class Registry:
     def __contains__(self, name: object) -> bool:
         if not isinstance(name, str):
             return False
-        key = normalize(name)
-        return key in self._tasks or key in self._aliases
+        return self.get(name) is not None
 
     def get(self, name: str) -> Task | None:
         key = normalize(name)
         key = self._aliases.get(key, key)
-        return self._tasks.get(key)
+        found = self._tasks.get(key)
+        if found is not None:
+            return found
+        # Only now, on a miss: an exact name is never reinterpreted, so a group
+        # alias can never take a name a real group already answers to.
+        prefix, dot, rest = key.partition(".")
+        real = self._group_aliases.get(prefix) if dot else None
+        return self._tasks.get(f"{real}.{rest}") if real else None
+
+    def group_aliases(self, name: str) -> tuple[str, ...]:
+        """Every alias that resolves to the group `name`."""
+        target = normalize(name)
+        return tuple(sorted(a for a, goal in self._group_aliases.items() if goal == target))
+
+    def names_for(self, item: Task) -> list[str]:
+        """Every spelling that resolves to `item`, the canonical one first."""
+        key = normalize(item.full_name)
+        names = [item.full_name]
+        names += sorted(a for a, target in self._aliases.items() if target == key)
+        if item.group:
+            names += [f"{a}.{item.name}" for a in self.group_aliases(item.group)]
+        return list(dict.fromkeys(names))
 
     def require(self, name: str) -> Task:
         found = self.get(name)
@@ -231,6 +337,9 @@ class Registry:
         import difflib
 
         candidates = list(self._tasks) + list(self._aliases)
+        for short, target in self._group_aliases.items():
+            prefix = f"{target}."
+            candidates += [f"{short}.{key[len(prefix) :]}" for key in self._tasks if key.startswith(prefix)]
         close = difflib.get_close_matches(normalize(name), candidates, n=3, cutoff=0.5)
         hint = f"did you mean: {', '.join(close)}?" if close else "run `mk --list` to see them all"
         raise UsageError(f"no task named {name!r}", hint=hint)
@@ -360,10 +469,35 @@ def task(
     return decorate
 
 
+def _caller() -> str:
+    """`file:line` of the first frame outside this module, for error messages."""
+    frame = sys._getframe(1)
+    while frame is not None and frame.f_globals.get("__name__") == __name__:
+        frame = frame.f_back
+    return f"{frame.f_code.co_filename}:{frame.f_lineno}" if frame is not None else ""
+
+
+def alias(name: str, target: str, *, into: Registry | None = None) -> None:
+    """Give a group -- or one task -- a second, shorter name.
+
+        alias("dx", "dioxus")           # dx.start, dx.stop, dx.tailwind, ...
+        alias("ship", "play.publish")   # one task, same as aliases=["ship"]
+
+    A bare target is a group, and covers every task in it, including ones added
+    later. A dotted target is that one task. Either way the alias is only an
+    input spelling: everything the tool prints keeps the canonical name.
+
+    Declare it beside the group where the group is defined -- a package ships its
+    own short name with `group("dioxus", alias="dx")` -- or in a consumer's task
+    file, for a group the consumer does not own.
+    """
+    (into or registry).add_alias(name, target, where=_caller())
+
+
 class Group:
     """A namespace you can decorate with directly.
 
-    web = group("web")
+    web = group("web", alias="w")
 
     @web
     def start(*, port: int = 8001) -> None: ...
@@ -372,9 +506,19 @@ class Group:
     def reset() -> None: ...
     """
 
-    def __init__(self, name: str, *, into: Registry | None = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        *,
+        alias: str | None = None,
+        aliases: Sequence[str] = (),
+        into: Registry | None = None,
+    ) -> None:
         self.name = name
         self._registry = into or registry
+        where = _caller()
+        for short in ([alias] if alias else []) + list(aliases):
+            self._registry.add_alias(short, name, where=where)
 
     def __call__(self, fn: Callable[..., Any]) -> Callable[..., Any]:
         return task(fn, group=self.name, into=self._registry)
@@ -388,9 +532,16 @@ class Group:
         return f"<Group {self.name}>"
 
 
-def group(name: str, *, into: Registry | None = None) -> Group:
-    """Create a namespace for tasks defined in this module."""
-    return Group(name, into=into)
+def group(
+    name: str, *, alias: str | None = None, aliases: Sequence[str] = (), into: Registry | None = None
+) -> Group:
+    """Create a namespace for tasks defined in this module.
+
+    `alias=` (or `aliases=` for more than one) is a shorter spelling of the whole
+    namespace: `group("dioxus", alias="dx")` makes every task in it answer to
+    `dx.<name>` as well.
+    """
+    return Group(name, alias=alias, aliases=aliases, into=into)
 
 
 def tasks_of(module: Any) -> Iterable[Task]:

@@ -32,6 +32,7 @@ working.
 | `[group('web')]` + a `web-` name prefix | `group="web"`, so `web.start` |
 | `[private]` | `hidden=True`, or a leading underscore |
 | `alias b := a` | `aliases=["b"]` |
+| an `alias` line per recipe in a group | `group("dioxus", alias="dx")`, so `dx.start` |
 | `task: dep1 dep2` | `needs=[dep1, dep2]` |
 | `*ARGS` | `*args: str` |
 | `{{ ARGS }}` spliced into bash | `sh("cmd", *args)` |

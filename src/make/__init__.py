@@ -35,13 +35,14 @@ from .params import Arg, arg
 from .poll import poll
 from .runner import invoke
 from .sh import Result, sh
-from .tasks import Group, Task, group, registry, task
+from .tasks import Group, Task, alias, group, registry, task
 
 __all__ = [
     "__version__",
     # authoring
     "task",
     "group",
+    "alias",
     "invoke",
     "sh",
     "ctx",

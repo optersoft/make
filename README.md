@@ -135,6 +135,25 @@ def serve(*, port: Annotated[int, arg("-p", help="dev port", env="DEV_PORT")] = 
 )
 ```
 
+### Shorter names
+
+`aliases=` gives one task a second name. A whole namespace gets one from the
+group it belongs to, or from anywhere with `alias()`:
+
+```python
+dioxus = group("dioxus", alias="dx")    # dx.start, dx.stop, dx.tailwind, ...
+
+alias("dx", "dioxus")                   # same, for a group you did not declare
+alias("ship", "play.publish")           # a dotted target is that one task
+```
+
+A group alias is a prefix, so a task added to the group later is covered without
+touching the alias. It is only an input spelling: `--list`, `--help`, `needs=`
+and every error message keep saying `dioxus.start`, and an exact name is never
+reinterpreted — the alias is consulted only after the real name misses. Pointing
+one at a group that has no tasks, or at a name that already belongs to a group or
+a task, is an error naming the line that declared it.
+
 ### Running commands
 
 ```python
