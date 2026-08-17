@@ -234,8 +234,16 @@ class _Sh:
         cwd: str | Path | None = None,
         env: Mapping[str, str] | None = None,
         log: str | Path | None = None,
+        hold_stdin: bool = False,
     ) -> subprocess.Popen[Any] | None:
-        """Spawn a detached child (dev servers, watchers). None under --dry-run."""
+        """Spawn a detached child (dev servers, watchers). None under --dry-run.
+
+        `hold_stdin=True` gives the child a stdin that never reaches EOF, and
+        survives this process exiting: the child itself inherits the write end
+        of the pipe it reads from. Some watchers (tailwindcss `--watch`) exit
+        the moment stdin closes -- the workaround used to be a shell wrapper
+        piping `tail -f /dev/null` into them.
+        """
         argv = _stringify(args)
         display = shlex.join(argv)
         if current().dry_run:
@@ -248,15 +256,28 @@ class _Sh:
             stream = open(log, "ab")  # noqa: SIM115 - owned by the child
         else:
             stream = subprocess.DEVNULL
-        return subprocess.Popen(
-            argv,
-            cwd=str(cwd) if cwd else None,
-            env=_merged_env(env),
-            stdout=stream,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            start_new_session=True,
-        )
+        stdin: int = subprocess.DEVNULL
+        pass_fds: tuple[int, ...] = ()
+        held: tuple[int, int] | None = None
+        if hold_stdin:
+            held = os.pipe()
+            os.set_inheritable(held[1], True)
+            stdin, pass_fds = held[0], (held[1],)
+        try:
+            return subprocess.Popen(
+                argv,
+                cwd=str(cwd) if cwd else None,
+                env=_merged_env(env),
+                stdout=stream,
+                stderr=subprocess.STDOUT,
+                stdin=stdin,
+                pass_fds=pass_fds,
+                start_new_session=True,
+            )
+        finally:
+            if held is not None:
+                os.close(held[0])
+                os.close(held[1])
 
     def replace_process(self, *args: Any, env: Mapping[str, str] | None = None) -> None:
         """`exec` into a command, replacing this process. Never returns."""

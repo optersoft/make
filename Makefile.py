@@ -99,8 +99,13 @@ def bench() -> None:
 
 @task(group="dist", requires=["uv"])
 def build() -> None:
-    """Build the wheel and sdist."""
-    sh("uv", "build")
+    """Build the wheel and sdist.
+
+    `--package mkrun` names the package deliberately: a bare `uv build`
+    happens to resolve to the root today, but `dist/` is uploaded wholesale,
+    and the `optersoft/` workspace member must never end up in it.
+    """
+    sh("uv", "build", "--package", "mkrun")
 
 
 @task(group="dist", needs=[check], requires=["git"], dangerous=True)

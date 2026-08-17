@@ -78,6 +78,27 @@ def test_missing_executable_is_a_tool_error_not_a_traceback(monkeypatch):
         sh("definitely-not-a-real-binary")
 
 
+def test_background_hold_stdin_keeps_a_watcher_alive():
+    """`cat` exits on stdin EOF -- exactly like tailwindcss --watch."""
+    import time
+
+    with context():
+        plain = sh.background("cat", log="/dev/null")
+        held = sh.background("cat", log="/dev/null", hold_stdin=True)
+    assert plain is not None and held is not None
+    try:
+        deadline = time.monotonic() + 5
+        while plain.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert plain.poll() is not None  # DEVNULL stdin: immediate EOF, cat exits
+        time.sleep(0.2)
+        assert held.poll() is None  # held pipe: no EOF, cat stays up
+    finally:
+        held.kill()
+        if plain.poll() is None:
+            plain.kill()
+
+
 def test_context_env_reaches_the_child():
     captured = {}
 

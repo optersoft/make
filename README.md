@@ -153,6 +153,34 @@ is data and cannot become syntax. Every one of these honours `--dry-run`; give
 `sh.out(..., dry="...")` or `sh.ok(..., dry=False)` a stand-in when the value
 steers later logic.
 
+Watchers that exit the moment stdin closes (tailwindcss `--watch`) take
+`sh.background(..., hold_stdin=True)` — a stdin that never reaches EOF, without
+the `tail -f /dev/null |` shell wrapper.
+
+### Waiting, HTTP and processes
+
+The three loops every task file used to hand-roll in bash — poll-until-ready,
+`curl -w '%{http_code}'`, and `lsof | kill`:
+
+```python
+from make import poll, http, proc
+
+pid = poll(lambda: sh.out("pidof", "-s", pkg, check=False, dry="4711"),
+           timeout=10, message=f"{pkg} to start")   # returns the truthy value
+
+http.get(url).status              # 200, 404, ... or 0 when unreachable
+http.ok(url)                      # bool; a bad status is a result, not an exception
+http.wait("http://localhost:8002/", timeout=60)     # raises WaitTimeout if never up
+
+proc.port_pids(8080)              # who is LISTENING on :8080
+proc.reap_port(8080)              # terminate them; -> the pids signalled
+proc.reap("dx serve.*8002")       # pgrep -f pattern; anchor it to YOUR thing
+```
+
+All of them honour `--dry-run`: `poll()` returns its `dry=` stand-in without
+looping, `http` answers with `dry_status=`, and `proc` reports what it would
+signal without killing anything.
+
 ### Changing files
 
 A dry run that suppresses every command but still writes files looks safe and

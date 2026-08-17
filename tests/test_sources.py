@@ -104,6 +104,10 @@ def run_make(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
     environment = {k: v for k, v in os.environ.items() if k != "_MAKE_BOOTSTRAPPED"}
     environment.pop("VIRTUAL_ENV", None)
     environment["NO_COLOR"] = "1"
+    # Hermetic: the developer's real ~/.make/sources.toml must not redirect
+    # this test's packages -- its relative paths would resolve against the
+    # tmp project and fail, or worse, silently succeed.
+    environment["MAKE_CONFIG_DIR"] = str(project / "home")
     return subprocess.run(
         [sys.executable, "-m", "make", *args],
         cwd=project,

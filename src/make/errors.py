@@ -62,3 +62,7 @@ class Aborted(MakeError):
     """The user declined a confirmation prompt, or pressed Ctrl-C."""
 
     exit_code = 130
+
+
+class WaitTimeout(MakeError):
+    """`poll()` gave up: the condition never became true within the timeout."""

@@ -17,12 +17,22 @@ distributable as versioned packages instead of a directory someone `git clone`d.
 
 from __future__ import annotations
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
-from . import config, env, fs
+from . import config, env, fs, http, proc
 from .context import Context, confirm, ctx, echo, info, note, paint, path, step, warn
-from .errors import Aborted, CommandFailed, ConfigError, MakeError, TaskError, ToolMissing, UsageError
+from .errors import (
+    Aborted,
+    CommandFailed,
+    ConfigError,
+    MakeError,
+    TaskError,
+    ToolMissing,
+    UsageError,
+    WaitTimeout,
+)
 from .params import Arg, arg
+from .poll import poll
 from .runner import invoke
 from .sh import Result, sh
 from .tasks import Group, Task, group, registry, task
@@ -40,6 +50,9 @@ __all__ = [
     "fs",
     "config",
     "arg",
+    "poll",
+    "http",
+    "proc",
     # output
     "step",
     "info",
@@ -63,6 +76,7 @@ __all__ = [
     "ToolMissing",
     "CommandFailed",
     "Aborted",
+    "WaitTimeout",
 ]
 
 

@@ -49,7 +49,14 @@ _INTERPOLATION = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z
 #: `~/.just` entry is deliberate migration support: if you are coming from
 #: `just`, your credentials already live there, and a tool that demands you move
 #: your secrets before it will run is a tool nobody adopts.
-CONFIG_DIRS = (Path.home() / ".make", Path.home() / ".just")
+#:
+#: `MAKE_CONFIG_DIR` replaces the whole list -- the hermeticity valve. A test
+#: harness (including this repo's own) must not inherit the developer's real
+#: `~/.make/sources.toml` and secrets through a spawned `mk`.
+_configured = os.environ.get("MAKE_CONFIG_DIR")
+CONFIG_DIRS = (
+    (Path(_configured).expanduser(),) if _configured else (Path.home() / ".make", Path.home() / ".just")
+)
 
 
 def config_dir() -> Path:

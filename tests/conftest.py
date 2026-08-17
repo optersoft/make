@@ -11,6 +11,21 @@ from make.tasks import registry as global_registry
 
 
 @pytest.fixture(autouse=True)
+def hermetic_config_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """No test reads the developer's real ~/.make or ~/.just.
+
+    A real `~/.make/sources.toml` redirecting packages to sibling checkouts is
+    exactly what this tool documents -- and its relative paths resolve against
+    each test's tmp project, failing (or worse, quietly succeeding) there.
+    Tests that need config layers monkeypatch CONFIG_DIRS themselves, on top.
+    """
+    from make import env as env_module
+
+    monkeypatch.setattr(env_module, "CONFIG_DIRS", (tmp_path / "make-home", tmp_path / "just-home"))
+    yield
+
+
+@pytest.fixture(autouse=True)
 def clean_registry():
     """Each test starts with an empty registry, and gives back what was there.
 
