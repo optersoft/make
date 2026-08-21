@@ -60,3 +60,58 @@ def test_sweep_visits_every_workspace(tmp_path, monkeypatch):
         rust.sweep(days=45)
     assert rec.matched(r"cargo sweep --time 45")
     assert rec.count("cargo", "sweep") == 2
+
+
+# -- gc --------------------------------------------------------------------
+
+
+def test_family_strips_only_a_hash_suffix():
+    assert rust.family("libweb-8ff30a997dcbb8f0.rlib") == "libweb.rlib"
+    assert rust.family("web-2f78bbnhs1lta") == "web"  # incremental, base62
+    assert rust.family("academy_web-9f16e406e4efc830.d") == "academy_web.d"
+    # A crate's own last segment is not a hash: no digit, or too short.
+    assert rust.family("libfoo-manager-aaa.rlib") == "libfoo-manager-aaa.rlib"
+    assert rust.family("libfoo-constants.rlib") == "libfoo-constants.rlib"
+
+
+def _artifact(directory: Path, name: str, age_s: float = 0, data: bytes = b"x" * 1024) -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    f = directory / name
+    f.write_bytes(data)
+    old = time.time() - age_s
+    os.utime(f, (old, old))
+    return f
+
+
+def test_gc_keeps_the_newest_per_family(tmp_path, monkeypatch):
+    t = _target(tmp_path, "app")
+    deps = t / "debug" / "deps"
+    newest = _artifact(deps, "libweb-aaaa111100000000.rlib", age_s=0)
+    middle = _artifact(deps, "libweb-bbbb222200000000.rlib", age_s=100)
+    oldest = _artifact(deps, "libweb-cccc333300000000.rlib", age_s=200)
+    single = _artifact(deps, "libother-dddd444400000000.rlib")
+    plain = _artifact(deps, "libnohash.rlib")
+    monkeypatch.chdir(tmp_path)
+    rust.gc(keep=2)
+    assert newest.exists() and middle.exists() and single.exists() and plain.exists()
+    assert not oldest.exists()
+
+
+def test_gc_collects_incremental_directories_and_triple_profiles(tmp_path, monkeypatch):
+    t = _target(tmp_path, "app")
+    profile = t / "aarch64-apple-darwin" / "server-dev"
+    (profile / "deps").mkdir(parents=True)  # what marks a profile dir
+    fresh = profile / "incremental" / "web-aaaa1111"
+    stale = profile / "incremental" / "web-bbbb2222"
+    for d in (fresh, stale):
+        d.mkdir(parents=True)
+        (d / "query-cache.bin").write_bytes(b"x" * 2048)
+    old = time.time() - 300
+    os.utime(stale, (old, old))
+    # target/dx squats in target/ but holds no deps/: never a profile dir.
+    dx = t / "dx" / "app" / "debug"
+    dx.mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+    rust.gc(keep=1)
+    assert fresh.exists() and not stale.exists()
+    assert dx.exists()
