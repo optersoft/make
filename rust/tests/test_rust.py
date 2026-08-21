@@ -6,6 +6,9 @@ import os
 import time
 from pathlib import Path
 
+import pytest
+
+from make.errors import MakeError
 from make.testing import record
 from make_rust import rust
 
@@ -115,3 +118,36 @@ def test_gc_collects_incremental_directories_and_triple_profiles(tmp_path, monke
     rust.gc(keep=1)
     assert fresh.exists() and not stale.exists()
     assert dx.exists()
+
+
+# -- config ----------------------------------------------------------------
+
+
+def test_config_creates_the_file_with_markers(tmp_path):
+    rust.config(cargo_home=str(tmp_path))
+    text = (tmp_path / "config.toml").read_text()
+    assert rust.CONFIG_BEGIN in text and rust.CONFIG_END in text
+    assert 'debug = "line-tables-only"' in text and "[profile.dev.package" in text
+
+
+def test_config_is_idempotent(tmp_path):
+    rust.config(cargo_home=str(tmp_path))
+    first = (tmp_path / "config.toml").read_text()
+    rust.config(cargo_home=str(tmp_path))
+    assert (tmp_path / "config.toml").read_text() == first
+
+
+def test_config_replaces_its_block_and_keeps_the_rest(tmp_path):
+    theirs = "[net]\ngit-fetch-with-cli = true\n"
+    stale = f"{theirs}\n{rust.CONFIG_BEGIN}\nstale = true\n{rust.CONFIG_END}\n"
+    (tmp_path / "config.toml").write_text(stale)
+    rust.config(cargo_home=str(tmp_path))
+    text = (tmp_path / "config.toml").read_text()
+    assert theirs in text and "stale = true" not in text
+    assert text.count(rust.CONFIG_BEGIN) == 1
+
+
+def test_config_refuses_a_user_owned_profile_dev(tmp_path):
+    (tmp_path / "config.toml").write_text("[profile.dev]\ndebug = 2\n")
+    with pytest.raises(MakeError, match="outside the managed block"):
+        rust.config(cargo_home=str(tmp_path))

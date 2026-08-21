@@ -19,7 +19,17 @@ $ mk rust.usage                    # every target/ dir: size + idle age
 $ mk rust.gc                       # delete superseded name-<hash> artifacts, keep newest 2
 $ mk rust.clean --older-than 30    # delete the ones nothing touched in 30 days
 $ mk rust.sweep                    # cargo sweep: trim stale artifacts, keep hot ones
+$ mk rust.config                   # install the dev debuginfo policy in ~/.cargo/config.toml
 ```
+
+`config` attacks the bytes at the source: dev builds otherwise carry full DWARF
+for the whole dependency graph (one repo with no `[profile.dev]` of its own
+held 15 GB of it). It writes `debug = "line-tables-only"` for workspace crates
+and `debug = false` for dependencies into `$CARGO_HOME/config.toml`, where
+config profiles merge over every repository's `Cargo.toml` — one run covers
+every checkout on the machine. The settings live between marker comments, so
+reruns replace them in place and everything around them survives; a
+`[profile.dev]` written by hand outside the block is refused, not duplicated.
 
 `gc` is the one that matters day-to-day. Cargo appends a new `name-<hash>`
 artifact on every feature/flag/dependency change and never deletes the old

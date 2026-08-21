@@ -15,10 +15,35 @@ import time
 from pathlib import Path
 
 from make import fs, note, sh, step, task
+from make.errors import MakeError
 
 #: Never descended into: nothing inside can be a workspace of THIS repo.
 #: `target` itself is here so a found dir is not also searched.
 PRUNE = {".git", "target", "node_modules", ".venv", "venv", "dist", "build"}
+
+#: Markers around the settings `rust.config` owns in $CARGO_HOME/config.toml,
+#: so reruns replace the block in place and everything around it survives.
+CONFIG_BEGIN = "# --- managed by `mk rust.config` (make-rust) ---"
+CONFIG_END = "# --- end of the `mk rust.config` block ---"
+
+CONFIG_BLOCK = f"""{CONFIG_BEGIN}
+# Dev-profile debuginfo policy, machine-wide. Config profiles MERGE OVER every
+# repository's Cargo.toml, so this covers all checkouts with no per-repo
+# commit; builds under another $CARGO_HOME (containers, CI) are unaffected.
+# Full DWARF for one dependency, one run:
+#     CARGO_PROFILE_DEV_PACKAGE_<crate>_DEBUG=2 cargo build
+
+[profile.dev]
+# Backtraces still resolve file:line in workspace crates; a debugger loses
+# variable info.
+debug = "line-tables-only"
+split-debuginfo = "unpacked"
+
+# Dependencies get no line tables at all: their frames show function names
+# only. This is where most of the bytes are -- deps/ dwarfs everything else.
+[profile.dev.package."*"]
+debug = false
+{CONFIG_END}"""
 
 #: Subdirectories of a profile dir where cargo appends `name-<hash>` entries on
 #: every feature/flag/dependency change and never deletes the superseded ones.
@@ -48,7 +73,9 @@ def profile_dirs(target: Path) -> list[Path]:
         if (child / "deps").is_dir():
             found.append(child)
         else:
-            found.extend(sub for sub in sorted(p for p in child.iterdir() if p.is_dir()) if (sub / "deps").is_dir())
+            found.extend(
+                sub for sub in sorted(p for p in child.iterdir() if p.is_dir()) if (sub / "deps").is_dir()
+            )
     return found
 
 
@@ -126,6 +153,44 @@ def clean(*, older_than: int = 0) -> None:
         step(f"{_human(kb):>8}  {t.relative_to(Path.cwd())}")
         fs.rmtree(t)
     note(f"reclaimed {_human(total)} from {len(doomed)} target dir(s)")
+
+
+@task(group="rust")
+def config(*, cargo_home: str = "") -> None:
+    """Install the dev debuginfo policy into $CARGO_HOME/config.toml.
+
+    Dev builds otherwise carry full DWARF for the whole dependency graph --
+    one repo with no [profile.dev] of its own held 15 GB of it. The settings
+    live between marker comments: created on the first run, replaced in place
+    on every later one, so hand-written content around them survives. A
+    [profile.dev] the user wrote *outside* the block is refused rather than
+    duplicated -- two tables of the same name would be invalid TOML.
+
+    Args:
+        cargo_home: where config.toml lives (default $CARGO_HOME or ~/.cargo)
+    """
+    home = Path(cargo_home or os.environ.get("CARGO_HOME") or Path.home() / ".cargo")
+    path = home / "config.toml"
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+
+    if CONFIG_BEGIN in text and CONFIG_END in text:
+        head, rest = text.split(CONFIG_BEGIN, 1)
+        tail = rest.split(CONFIG_END, 1)[1]
+        outside, new = head + tail, head + CONFIG_BLOCK + tail
+    else:
+        separator = "" if not text else ("\n" if text.endswith("\n") else "\n\n")
+        outside, new = text, text + separator + CONFIG_BLOCK + "\n"
+
+    if "[profile.dev" in outside:
+        raise MakeError(
+            f"{path} already defines [profile.dev] outside the managed block -- "
+            "merge it by hand, then delete yours: a duplicate table is invalid TOML"
+        )
+    if new == text:
+        note(f"{path} is current")
+        return
+    fs.write(path, new)
+    note(f"debuginfo policy {'updated' if CONFIG_BEGIN in text else 'installed'} in {path}")
 
 
 @task(group="rust")
