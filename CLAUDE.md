@@ -19,11 +19,17 @@ with `mkrun = { workspace = true }` in the member, so a runner change is tested 
 tasks in the same commit.
 
 ⚠️ **`optersoft-make` no longer lives here.** It was the second member (`optersoft/`) until
-2026-08-17, when it moved to the private
-[`optersoft/make-optersoft`](https://github.com/optersoft/make-optersoft) repo so this one can go
-public without shipping any of the fleet. Consumers' git sources point there, with no
-`subdirectory` — the old `make.git` + `subdirectory = "optersoft"` form resolves to a tip where
-the package no longer exists.
+2026-08-17, when it moved to the private `make-optersoft` repo (on the forge,
+`code.optersoft.com/make-optersoft.git`) so this one can go public without shipping any of the
+fleet. Consumers' git sources point there, with no `subdirectory` — the old `make.git` +
+`subdirectory = "optersoft"` form resolves to a tip where the package no longer exists.
+
+⚠️ **And it is gone from this repo's history too, as of 2026-08-24.** Moving the directory left
+all 11 commits that touched `optersoft/` intact, which meant a public clone could still check out
+the fleet's private tasks at any older tag — `v0.2.0` and `v0.3.0` both contained them. Publishing
+to `github.com/optersoft/make` was preceded by `git-filter-repo --path optersoft --invert-paths`,
+so **every SHA here changed** (35 → 31 commits). Nothing pinned them: this repo reaches consumers
+as `mkrun`/`make-rust` on **PyPI**, never as a git dependency.
 
 ## Commands
 
@@ -75,7 +81,7 @@ The convention this tool exists to enable:
 - Fully generic groups that wrap a tool *nobody anywhere* owns — cargo, in `rust/` — live here,
   beside the runner, and publish like it.
 - optersoft's fleet groups (android, play, agent, database, secure) are in the private
-  [`make-optersoft`](https://github.com/optersoft/make-optersoft) repo.
+  `make-optersoft` repo on the forge (`code.optersoft.com/make-optersoft.git`).
 - A consumer names the source per package (`git` or `path`) in `[tool.uv.sources]`, and can
   redirect any of them to a local checkout with a gitignored `.make/sources.toml` without
   touching the committed file. Relative paths there resolve against the **repo root**, so one
