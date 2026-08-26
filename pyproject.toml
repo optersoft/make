@@ -30,8 +30,8 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://code.optersoft.com/make"
-Source = "https://code.optersoft.com/make"
+Homepage = "https://github.com/optersoft/make"
+Source = "https://github.com/optersoft/make"
 
 # `mk`, and only `mk`. Installing a `make` script would shadow GNU make on the
 # PATH of every Unix machine, which is a lot to take from a tool you installed
