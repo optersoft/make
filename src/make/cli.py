@@ -20,8 +20,8 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from . import __version__
-from .context import Context, echo, error, paint, set_context, warn
-from .errors import MakeError, UsageError
+from .context import Context, confirm, echo, error, info, paint, set_context, using, warn
+from .errors import Aborted, MakeError, UsageError
 from .params import parse_args, render_usage
 from .runner import Invocation, run
 from .tasks import Task, registry
@@ -456,9 +456,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         from .bootstrap import needs_bootstrap, read_metadata, reexec, sync
-        from .discovery import load_task_file, require_task_file
+        from .discovery import load_task_file
 
-        task_file = options.file.resolve() if options.file else require_task_file()
+        task_file = options.file.resolve() if options.file else _task_file_or_offer_one(options)
         if options.file and not task_file.is_file():
             raise UsageError(f"{task_file} does not exist")
 
@@ -541,6 +541,41 @@ def main(argv: Sequence[str] | None = None) -> int:
                 echo(paint(f"    {last.line}", "dim"))
         echo(paint("  (run with --traceback for the full trace)", "dim"))
         return 1
+
+
+def _task_file_or_offer_one(options: _Options) -> Path:
+    """The task file above the cwd, or -- with nobody's consent assumed -- a fresh one.
+
+    An empty project used to get the usage error with a demo file pasted into
+    the hint, which is the right content in the wrong place: the person then
+    had to retype it. Now, on a terminal, `mk` asks whether to write that file
+    and carries on with it, so the very next thing they see is its task list.
+    A pipe or a script still gets the error: nothing writes into a repository
+    without someone saying yes, and `--yes` is how a script says it.
+    """
+    from .discovery import create_task_file, find_task_file, require_task_file
+
+    found = find_task_file()
+    if found is not None:
+        return found
+    here = Path.cwd().resolve()
+    if (here / "make.py").is_file():
+        require_task_file(here)  # raises, with the rename hint
+    if not options.yes and not sys.stdin.isatty():
+        require_task_file(here)  # raises: no one is there to answer
+    provisional = Context(
+        root=here,
+        invocation_dir=here,
+        quiet=options.quiet,
+        color=options.color and not os.environ.get("NO_COLOR"),
+    )
+    with using(provisional):
+        warn(f"no task file found in {here} or any parent")
+        if not options.yes and not confirm(f"create {here / 'Makefile.py'} with a starter task?"):
+            raise Aborted("no task file")
+        created = create_task_file(here)
+        info(f"created {created}")
+    return created
 
 
 def _report(exc: MakeError, *, traceback_wanted: bool) -> None:

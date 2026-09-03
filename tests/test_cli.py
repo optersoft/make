@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 from pathlib import Path
 
 import pytest
@@ -9,7 +10,7 @@ from helpers import write
 
 from make.bootstrap import ScriptMetadata, needs_bootstrap, read_metadata
 from make.cli import main
-from make.discovery import find_task_file, require_task_file
+from make.discovery import create_task_file, find_task_file, require_task_file
 from make.errors import UsageError
 
 TASKS = """
@@ -153,6 +154,52 @@ def test_missing_task_file_explains_how_to_start(project: Path):
         require_task_file(project)
     assert "no task file found" in caught.value.message
     assert "Makefile.py" in (caught.value.hint or "")
+
+
+def test_missing_task_file_is_an_error_off_a_terminal(project: Path, capsys, monkeypatch):
+    monkeypatch.setattr("sys.stdin", io.StringIO(""))  # a pipe: nobody can answer
+    assert main([]) == 2
+    err = capsys.readouterr().err
+    assert "no task file found" in err
+    assert not (project / "Makefile.py").exists()
+
+
+def test_missing_task_file_is_offered_on_a_terminal(project: Path, capsys, monkeypatch):
+    monkeypatch.setattr("sys.stdin", _Tty("y\n"))
+    assert main([]) == 0
+    err = capsys.readouterr().err
+    assert "create" in err and "Makefile.py" in err
+    created = project / "Makefile.py"
+    assert created.is_file()
+    assert "def hello" in created.read_text()
+    assert "hello" in err  # ...and the new file's task list follows straight away
+
+
+def test_declining_the_offer_creates_nothing(project: Path, capsys, monkeypatch):
+    monkeypatch.setattr("sys.stdin", _Tty("n\n"))
+    assert main([]) == 130
+    assert not (project / "Makefile.py").exists()
+
+
+def test_yes_creates_the_task_file_without_asking(project: Path, capsys, monkeypatch):
+    monkeypatch.setattr("sys.stdin", io.StringIO(""))
+    assert main(["--yes"]) == 0
+    assert (project / "Makefile.py").is_file()
+    assert "created" in capsys.readouterr().err
+
+
+def test_create_task_file_refuses_to_overwrite(project: Path):
+    write(project / "Makefile.py", "x = 1\n")
+    with pytest.raises(UsageError):
+        create_task_file(project)
+    assert (project / "Makefile.py").read_text() == "x = 1\n"
+
+
+class _Tty(io.StringIO):
+    """stdin that claims to be a terminal, so `confirm()` reads the scripted answer."""
+
+    def isatty(self) -> bool:
+        return True
 
 
 def test_a_stray_make_py_is_diagnosed(project: Path):

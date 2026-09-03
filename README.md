@@ -389,7 +389,10 @@ mk [options] <task> [arguments] [<task> [arguments] ...]
 Task files, searched from the current directory upward: `Makefile.py`,
 `makefile.py`, `mk.py`, `.make/main.py`. Not `make.py` — that name can shadow
 `import make`. (A `make/` *directory* is fine: namespace packages rank below
-installed ones, so it cannot shadow anything.)
+installed ones, so it cannot shadow anything.) When none exists, `mk` on a
+terminal offers to create a starter `Makefile.py` in the current directory and
+lists its tasks; `mk --yes` creates it without asking, and off a terminal it is
+an error, since nothing should write into a repository unasked.
 
 ## Repository layout
 
