@@ -15,6 +15,7 @@ name with one. `mk copy a.txt web.stop` copies to a directory called
 from __future__ import annotations
 
 import os
+import re
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -37,7 +38,6 @@ options:
   -V, --version          print the version
   -n, --dry-run          print commands instead of running them
   -y, --yes              pre-answer confirmations for dangerous tasks
-  -f, --force            ignore inputs=/outputs= staleness and run anyway
   -j, --jobs N           run independent prerequisites in parallel
   -q, --quiet            only show errors
   -v, --verbose          more detail (repeatable)
@@ -45,7 +45,7 @@ options:
   -F, --file PATH        use this task file
   -e, --env KEY=VALUE    set an environment variable for every command
       --json             machine-readable output (with --list)
-      --doctor           check that every declared tool is installed
+      --doctor           check declared tools, package sources, and the docstring's task names
       --sync             resolve and pin the task file's dependencies
       --upgrade          with --sync, move the pins to the newest allowed
       --add PKG          with --sync, add a task package to the task file
@@ -68,7 +68,6 @@ class _Options:
         self.version = False
         self.dry_run = False
         self.yes = False
-        self.force = False
         self.jobs = 1
         self.quiet = False
         self.verbose = 0
@@ -123,8 +122,6 @@ def _parse_global(argv: list[str]) -> tuple[_Options, list[str]]:
             options.dry_run = True
         elif name in ("-y", "--yes"):
             options.yes = True
-        elif name in ("-f", "--force"):
-            options.force = True
         elif name in ("-j", "--jobs"):
             options.jobs = max(1, int(value(name)))
         elif name in ("-q", "--quiet"):
@@ -421,7 +418,48 @@ def _doctor(task_file: Path | None = None, metadata: object = None) -> int:
     abstract = [i.full_name for i in registry.all(include_hidden=True) if i.abstract]
     if abstract:
         warn("unimplemented tasks: " + ", ".join(abstract))
+    stale = stale_docstring_names()
+    if stale:
+        warn("the task file's docstring names tasks that do not exist: " + ", ".join(stale))
     return 1 if missing else 0
+
+
+def docstring_task_names(doc: str) -> list[str]:
+    """Every task a module docstring's `mk ...` lines name, braces expanded.
+
+    A task file's docstring is where a repo lists what is its own -- and the
+    one thing such a table reliably does is fall behind the tasks. Recognised
+    spellings: `mk check`, `mk server.build / server.deploy`,
+    `mk test.{unit,http}`, `mk android.{auto,test,\n  test-auto}` (a brace list
+    may wrap), `mk gateway.build / .deploy` (a leading dot reuses the group). Anything starting with `-` is an option, not a task; `<arg>` and
+    `[flag]` tails are ignored.
+    """
+    import itertools
+
+    found: list[str] = []
+    for match in re.finditer(r"\bmk\s+((?:[\w.-]+(?:\{[^}]*\})?(?:\s*/\s*)?)+)", doc):
+        group = ""
+        for spelling in re.split(r"\s*/\s*", match.group(1).strip()):
+            spelling = re.sub(r"\s+", "", spelling)
+            if not spelling or spelling.startswith("-"):
+                continue
+            if spelling.startswith("."):  # `mk gateway.build / .deploy`: same group as the last one
+                spelling = group + spelling
+            group = spelling.rpartition(".")[0]
+            parts = re.split(r"(\{[^}]*\})", spelling)
+            choices = [p[1:-1].split(",") if p.startswith("{") else [p] for p in parts if p]
+            found.extend("".join(combo) for combo in itertools.product(*choices))
+    return found
+
+
+def stale_docstring_names() -> list[str]:
+    """The docstring's task names that the registry cannot resolve."""
+    from .discovery import MODULE_NAME
+
+    module = sys.modules.get(MODULE_NAME)
+    doc = getattr(module, "__doc__", None) or ""
+    groups = set(registry.groups(include_hidden=True))
+    return sorted({name for name in docstring_task_names(doc) if name not in registry and name not in groups})
 
 
 # --------------------------------------------------------------------------
@@ -473,7 +511,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 task_file=task_file,
                 dry_run=options.dry_run,
                 yes=options.yes,
-                force=options.force,
                 quiet=options.quiet,
                 verbose=options.verbose,
                 jobs=options.jobs,

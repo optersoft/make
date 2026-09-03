@@ -149,15 +149,17 @@ def record(
     def fake_popen(argv: Any, *args: Any, **kwargs: Any) -> Any:
         command = [str(part) for part in argv] if isinstance(argv, (list, tuple)) else [str(argv)]
         recorder.commands.append(command)
+        code, _ = recorder._lookup(shlex.join(command))
 
         class _Fake:
             pid = 4242
+            returncode = code
 
             def poll(self) -> int | None:
                 return None
 
             def wait(self, timeout: float | None = None) -> int:
-                return 0
+                return code
 
             def terminate(self) -> None:
                 return None

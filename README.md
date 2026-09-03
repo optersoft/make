@@ -126,8 +126,6 @@ def serve(*, port: Annotated[int, arg("-p", help="dev port", env="DEV_PORT")] = 
     needs=[build, sign],    # run first, once per invocation
     requires=["fastlane"],  # must be on PATH; checked before anything runs
     dangerous=True,         # demand --yes or an interactive confirmation
-    inputs=["src/**/*.rs"], # skip when outputs are newer than inputs
-    outputs=["dist/app"],
     aliases=["ship"],
     abstract=False,         # declared but unimplemented; a consumer must override
     override=False,         # True, or the full name of the task being replaced
@@ -359,8 +357,8 @@ def test_start_reaps_a_stale_lock_holder():
 
 `record()` captures every command instead of running it, answers `sh.out()` with
 canned text, and reports declared tools as present. Tasks called from Python
-are plain functions — `needs=`, the confirmation gate and staleness belong to the
-runner, not the function.
+are plain functions — `needs=` and the confirmation gate belong to the runner,
+not the function.
 
 ## Command line
 
@@ -371,7 +369,6 @@ mk [options] <task> [arguments] [<task> [arguments] ...]
 -h, --help [RECIPE]    help, or full help for one task
 -n, --dry-run          print commands instead of running them
 -y, --yes              pre-answer confirmations for dangerous tasks
--f, --force            ignore inputs=/outputs= staleness
 -j, --jobs N           run independent prerequisites in parallel
 -q, --quiet            only errors
 -v, --verbose          more detail (repeatable)
@@ -379,7 +376,8 @@ mk [options] <task> [arguments] [<task> [arguments] ...]
 -F, --file PATH        use this task file
 -e, --env KEY=VALUE    set a variable for every command
     --json             machine-readable --list
-    --doctor           every declared tool, and where each package resolved from
+    --doctor           every declared tool, where each package resolved from, and
+                       whether the task file's docstring names tasks that exist
     --sync             resolve and pin dependencies
     --upgrade          with --sync, move the pins
     --add PKG          with --sync, add a package (--path DIR | --git URL)

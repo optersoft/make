@@ -95,8 +95,6 @@ class Task:
     abstract: bool = False
     hidden: bool = False
     aliases: tuple[str, ...] = ()
-    inputs: tuple[str, ...] = ()
-    outputs: tuple[str, ...] = ()
     keep_cwd: bool = False
     override: str | bool = False
     module: str = ""
@@ -374,8 +372,6 @@ def _make_task(
     abstract: bool,
     hidden: bool,
     aliases: Sequence[str],
-    inputs: Sequence[str],
-    outputs: Sequence[str],
     keep_cwd: bool,
     override: str | bool,
     into: Registry,
@@ -397,8 +393,6 @@ def _make_task(
         abstract=abstract,
         hidden=hidden or (name or fn.__name__).startswith("_"),
         aliases=tuple(aliases),
-        inputs=tuple(inputs),
-        outputs=tuple(outputs),
         keep_cwd=keep_cwd,
         override=override,
         module=getattr(fn, "__module__", ""),
@@ -421,8 +415,6 @@ def task(
     abstract: bool = False,
     hidden: bool = False,
     aliases: Sequence[str] = (),
-    inputs: Sequence[str] = (),
-    outputs: Sequence[str] = (),
     keep_cwd: bool = False,
     override: str | bool = False,
     into: Registry | None = None,
@@ -440,7 +432,6 @@ def task(
         abstract: declared but unimplemented; a consumer must override it.
         hidden: keep out of `--list` (also implied by a leading underscore).
         aliases: extra names that resolve to this task.
-        inputs/outputs: globs; the task is skipped when outputs are newer.
         keep_cwd: run in the caller's directory instead of the task-file root.
         override: replace an existing task -- True for the same name, or the
             full name of the one being replaced.
@@ -457,8 +448,6 @@ def task(
             abstract=abstract,
             hidden=hidden,
             aliases=aliases,
-            inputs=inputs,
-            outputs=outputs,
             keep_cwd=keep_cwd,
             override=override,
             into=into or registry,

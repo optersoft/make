@@ -1,8 +1,8 @@
-"""Executing tasks: prerequisites, gates, staleness, parallelism.
+"""Executing tasks: prerequisites, gates, parallelism.
 
 Everything here is deliberately outside the decorator, so that importing a
 task and calling it from Python stays plain function application. `needs=`,
-`requires=`, the confirmation gate and staleness skipping are properties of
+`requires=` and the confirmation gate are properties of
 *running* a task from the command line, not of the function itself -- which is
 what makes tasks testable without a harness.
 """
@@ -37,50 +37,6 @@ class Invocation:
     task: Task
     args: list[Any] = field(default_factory=list)
     kwargs: dict[str, Any] = field(default_factory=dict)
-
-
-# --------------------------------------------------------------------------
-# Staleness
-# --------------------------------------------------------------------------
-
-
-def _expand(patterns: Sequence[str], root: Path) -> list[Path]:
-    found: list[Path] = []
-    for pattern in patterns:
-        if any(ch in pattern for ch in "*?["):
-            found.extend(p for p in root.glob(pattern) if p.is_file())
-        else:
-            path = root / pattern
-            if path.is_dir():
-                found.extend(p for p in path.rglob("*") if p.is_file())
-            elif path.is_file():
-                found.append(path)
-    return found
-
-
-def is_up_to_date(item: Task) -> bool:
-    """True when every declared output is newer than every declared input.
-
-    Opt-in and deliberately shallow: this is not a build system, and a task
-    without `inputs=`/`outputs=` always runs. It exists so that expensive,
-    obviously-cacheable steps (compiling a stylesheet, rendering a diagram) stop
-    costing a second every time something else in the chain needs them.
-    """
-    if not item.inputs or not item.outputs:
-        return False
-    root = current().root
-    outputs = _expand(item.outputs, root)
-    if not outputs:
-        return False
-    for pattern in item.outputs:
-        if not any(ch in pattern for ch in "*?[") and not (root / pattern).exists():
-            return False
-    inputs = _expand(item.inputs, root)
-    if not inputs:
-        return True
-    newest_input = max(p.stat().st_mtime for p in inputs)
-    oldest_output = min(p.stat().st_mtime for p in outputs)
-    return oldest_output >= newest_input
 
 
 # --------------------------------------------------------------------------
@@ -124,7 +80,7 @@ def _check_abstract(item: Task) -> None:
 
 
 def run_one(item: Task, args: Sequence[Any] = (), kwargs: dict[str, Any] | None = None) -> Any:
-    """Run a single task with its gates, prerequisites and staleness check."""
+    """Run a single task with its gates and prerequisites."""
     context = current()
     key = normalize(item.full_name)
 
@@ -134,12 +90,6 @@ def run_one(item: Task, args: Sequence[Any] = (), kwargs: dict[str, Any] | None 
 
     _check_abstract(item)
     _check_tools(item)
-
-    if is_up_to_date(item) and not context.force:
-        note(f"{item.full_name}: up to date")
-        with _memo_lock:
-            context._memo[key] = None
-        return None
 
     _run_needs(item)
     _check_dangerous(item)

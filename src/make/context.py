@@ -37,9 +37,6 @@ class Context:
     yes: bool = False
     """Pre-answer confirmation prompts for `dangerous=True` tasks."""
 
-    force: bool = False
-    """Ignore `inputs=`/`outputs=` staleness and run anyway."""
-
     quiet: bool = False
     verbose: int = 0
     jobs: int = 1

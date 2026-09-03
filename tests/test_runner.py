@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import time
-from pathlib import Path
 
 import pytest
 
 from make.errors import Aborted, TaskError, ToolMissing
-from make.runner import is_up_to_date, run_one
+from make.runner import run_one
 from make.tasks import registry as global_registry
 from make.tasks import task
 from make.testing import context, record
@@ -96,67 +95,6 @@ def test_abstract_task_refuses_with_instructions():
             run_one(global_registry.require("play.test-gate"))
     assert "not implemented" in caught.value.message
     assert "override='play.test-gate'" in (caught.value.hint or "")
-
-
-def test_staleness_skips_when_outputs_are_newer(project: Path):
-    (project / "src").mkdir()
-    (project / "src" / "a.css").write_text("a")
-    time.sleep(0.01)
-    (project / "out.css").write_text("compiled")
-
-    ran = []
-
-    @task(inputs=["src/*.css"], outputs=["out.css"])
-    def css() -> None:
-        ran.append(True)
-
-    with context(root=project):
-        item = global_registry.require("css")
-        assert is_up_to_date(item)
-        run_one(item)
-    assert ran == []
-
-
-def test_staleness_runs_when_an_input_is_newer(project: Path):
-    (project / "src").mkdir()
-    (project / "out.css").write_text("compiled")
-    time.sleep(0.01)
-    (project / "src" / "a.css").write_text("a")
-
-    ran = []
-
-    @task(inputs=["src/*.css"], outputs=["out.css"])
-    def css() -> None:
-        ran.append(True)
-
-    with context(root=project):
-        run_one(global_registry.require("css"))
-    assert ran == [True]
-
-
-def test_force_ignores_staleness(project: Path):
-    (project / "out.css").write_text("compiled")
-    (project / "in.css").write_text("a")
-
-    ran = []
-
-    @task(inputs=["in.css"], outputs=["out.css"])
-    def css() -> None:
-        ran.append(True)
-
-    with context(root=project, force=True):
-        run_one(global_registry.require("css"))
-    assert ran == [True]
-
-
-def test_missing_output_is_always_stale(project: Path):
-    (project / "in.css").write_text("a")
-
-    @task(inputs=["in.css"], outputs=["never-built.css"])
-    def css() -> None: ...
-
-    with context(root=project):
-        assert not is_up_to_date(global_registry.require("css"))
 
 
 def test_parallel_prerequisites_all_run():

@@ -21,12 +21,13 @@ import os
 import shlex
 import shutil
 import subprocess
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, Any
 
-from .context import current, echo, paint
+from .context import current, echo, note, paint
 from .errors import CommandFailed, ToolMissing
 
 __all__ = ["Result", "sh"]
@@ -94,6 +95,52 @@ def _echo_command(display: str, *, skipped: bool) -> None:
     echo(prefix + paint("$ ", "cyan", "bold") + paint(display, "cyan"))
 
 
+def _run_with_heartbeat(
+    argv: list[str],
+    display: str,
+    *,
+    cwd: str | Path | None,
+    env: Mapping[str, str] | None,
+    input: str | None,
+    stdin: IO[Any] | int | None,
+    text: bool,
+    timeout: float | None,
+    every: float,
+) -> subprocess.CompletedProcess[Any]:
+    """`subprocess.run` that notes "still running (Ns)" every `every` seconds.
+
+    Output streams through untouched; only the wait is chopped into slices so
+    a note can land between them. This used to be a task-file helper running
+    the call on a second thread, which then had to propagate the ContextVar
+    context by hand or a `--dry-run` would have run the real build.
+    """
+    label = display if len(display) <= 60 else display[:57] + "..."
+    process = subprocess.Popen(
+        argv,
+        cwd=str(cwd) if cwd else None,
+        env=_merged_env(env),
+        stdin=subprocess.PIPE if input is not None else stdin,
+        text=text,
+    )
+    if input is not None and process.stdin is not None:
+        process.stdin.write(input)
+        process.stdin.close()
+    started = time.monotonic()
+    deadline = started + timeout if timeout else None
+    while True:
+        try:
+            code = process.wait(timeout=every)
+            break
+        except subprocess.TimeoutExpired:
+            elapsed = time.monotonic() - started
+            if deadline and time.monotonic() >= deadline:
+                process.kill()
+                process.wait()
+                raise subprocess.TimeoutExpired(argv, timeout) from None
+            note(f"{label}: still running ({elapsed:.0f}s elapsed)")
+    return subprocess.CompletedProcess(argv, code)
+
+
 class _Sh:
     """Callable namespace: `sh(...)` plus the `sh.out` / `sh.ok` / ... helpers."""
 
@@ -110,7 +157,15 @@ class _Sh:
         dry_result: Result | None = None,
         timeout: float | None = None,
         text: bool = True,
+        heartbeat: float | None = None,
     ) -> Result:
+        """Run a command. `heartbeat=N` notes elapsed time every N seconds while it runs.
+
+        The heartbeat is for a step that legitimately prints nothing for a long
+        time -- an emulated amd64 `docker build` (15 minutes is normal) or a
+        remote deploy -- where silence reads exactly like a hang. It needs
+        `capture=False` (the default); a captured command is quiet by design.
+        """
         argv = _stringify(args)
         if not argv:
             raise ValueError("sh() needs at least one argument")
@@ -125,17 +180,30 @@ class _Sh:
             _echo_command(display, skipped=False)
 
         try:
-            completed = subprocess.run(
-                argv,
-                cwd=str(cwd) if cwd else None,
-                env=_merged_env(env),
-                input=input,
-                stdin=stdin,
-                capture_output=capture,
-                text=text,
-                timeout=timeout,
-                check=False,
-            )
+            if heartbeat and not capture:
+                completed = _run_with_heartbeat(
+                    argv,
+                    display,
+                    cwd=cwd,
+                    env=env,
+                    input=input,
+                    stdin=stdin,
+                    text=text,
+                    timeout=timeout,
+                    every=heartbeat,
+                )
+            else:
+                completed = subprocess.run(
+                    argv,
+                    cwd=str(cwd) if cwd else None,
+                    env=_merged_env(env),
+                    input=input,
+                    stdin=stdin,
+                    capture_output=capture,
+                    text=text,
+                    timeout=timeout,
+                    check=False,
+                )
         except FileNotFoundError as exc:
             raise ToolMissing(
                 f"{argv[0]!r} is not on PATH",

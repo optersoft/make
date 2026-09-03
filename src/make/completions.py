@@ -24,7 +24,7 @@ _mk_complete() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
     if [[ "$cur" == -* ]]; then
-        COMPREPLY=( $(compgen -W "--list --help --version --dry-run --yes --force \
+        COMPREPLY=( $(compgen -W "--list --help --version --dry-run --yes \
 --jobs --quiet --verbose --cwd --file --env --json --doctor --sync --add --path --git \
 --completions --no-bootstrap --traceback --no-color" -- "$cur") )
         return
@@ -45,7 +45,6 @@ _mk() {
         '(-l --list)'{-l,--list}'[list tasks]' \\
         '(-n --dry-run)'{-n,--dry-run}'[print commands instead of running them]' \\
         '(-y --yes)'{-y,--yes}'[pre-answer confirmations]' \\
-        '(-f --force)'{-f,--force}'[ignore staleness]' \\
         '(-j --jobs)'{-j,--jobs}'[parallel prerequisites]:jobs:' \\
         '(-q --quiet)'{-q,--quiet}'[only show errors]' \\
         '(-v --verbose)'{-v,--verbose}'[more detail]' \\

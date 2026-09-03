@@ -444,3 +444,38 @@ def test_bootstrap_checks_name_the_distribution_not_the_import_name():
     for line in source.splitlines():
         if "ScriptMetadata(dependencies=" in line:
             assert '"make' not in line and "'make" not in line, line
+
+
+def test_docstring_task_names_expand_braces_and_slashes():
+    from make.cli import docstring_task_names
+
+    doc = """Tasks.
+
+        mk check                     type-check
+        mk test.{unit,http}          suites
+        mk server.build / server.deploy [--restart]
+        mk android.{auto,
+                    test-auto}
+        mk gateway.build / .deploy / .deploy-all
+        mk --doctor
+    """
+    assert docstring_task_names(doc) == [
+        "check",
+        "test.unit",
+        "test.http",
+        "server.build",
+        "server.deploy",
+        "android.auto",
+        "android.test-auto",
+        "gateway.build",
+        "gateway.deploy",
+        "gateway.deploy-all",
+    ]
+
+
+def test_doctor_warns_about_a_stale_docstring(repo: Path, capsys):
+    write(repo / "Makefile.py", '"""Tasks.\n\n    mk web.start\n    mk web.gone / vanished\n"""\n' + TASKS)
+    main(["--doctor"])
+    err = capsys.readouterr().err
+    assert "do not exist: vanished, web.gone" in err
+    assert "web.start" not in err.split("do not exist:")[-1]
