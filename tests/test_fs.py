@@ -74,3 +74,27 @@ def test_reading_is_never_suppressed(project: Path):
     with context(root=project, dry_run=True):
         assert source.read_text() == "content"
         assert list(project.glob("*.txt")) == [source]
+
+
+def test_copytree_mirrors_and_ignores(project: Path):
+    src = project / "pages"
+    (src / ".git").mkdir(parents=True)
+    (src / ".git" / "HEAD").write_text("ref")
+    (src / "a.md").write_text("a")
+    out = project / "dist" / "pages"
+    out.mkdir(parents=True)
+    (out / "stale.md").write_text("old")
+    with context(root=project):
+        fs.copytree(src, out, ignore=[".git"])
+    assert (out / "a.md").read_text() == "a"
+    assert not (out / ".git").exists()
+    assert not (out / "stale.md").exists()  # replace=True mirrors, never merges
+
+
+def test_copytree_is_suppressed(project: Path):
+    src = project / "pages"
+    src.mkdir()
+    (src / "a.md").write_text("a")
+    with context(root=project, dry_run=True):
+        fs.copytree(src, project / "out")
+    assert not (project / "out").exists()

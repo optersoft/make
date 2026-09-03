@@ -14,6 +14,7 @@ Use these instead of `pathlib` and `shutil` wherever a task changes something:
     fs.write(path, text)
     fs.mkdir(path)
     fs.copy(source, destination)
+    fs.copytree(source, destination)
     fs.remove(path)
     fs.rmtree(path)
     fs.replace(source, destination)
@@ -27,11 +28,12 @@ from __future__ import annotations
 
 import os
 import shutil
+from collections.abc import Sequence
 from pathlib import Path
 
 from .context import current, echo, paint
 
-__all__ = ["write", "mkdir", "copy", "remove", "rmtree", "replace", "touch", "chmod"]
+__all__ = ["write", "mkdir", "copy", "copytree", "remove", "rmtree", "replace", "touch", "chmod"]
 
 
 def _announce(action: str, target: object, *, extra: str = "") -> bool:
@@ -73,6 +75,28 @@ def copy(source: str | Path, destination: str | Path, *, parents: bool = True) -
     if parents:
         target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, target)
+    return target
+
+
+def copytree(
+    source: str | Path, destination: str | Path, *, ignore: Sequence[str] = (), replace: bool = True
+) -> Path:
+    """Copy a directory tree. `ignore` holds glob patterns (`.git`, `*.pyc`).
+
+    With `replace` (the default) an existing destination is removed first, so
+    the result mirrors the source rather than merging into stale contents --
+    the shape every "stage this tree into the artifact" task wants.
+    """
+    target = Path(destination)
+    if not _announce(
+        "copytree", f"{source} -> {target}", extra=f" (ignoring {', '.join(ignore)})" if ignore else ""
+    ):
+        return target
+    if replace and target.exists():
+        shutil.rmtree(target)
+    shutil.copytree(
+        source, target, ignore=shutil.ignore_patterns(*ignore) if ignore else None, dirs_exist_ok=not replace
+    )
     return target
 
 
