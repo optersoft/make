@@ -138,8 +138,9 @@ def completions(shell: str = "zsh") -> None:
 
 # The landing page in site/ -- static files, no build step, published to the
 # Cloudflare Pages project `mkrun` by direct upload. There is no framework and
-# nothing to compile on purpose: the page is a description, four links and a
-# changelog, and a toolchain for that is a second thing to keep alive.
+# nothing to compile on purpose: the page is a description, the case for using
+# the tool and four links, and a toolchain for that is a second thing to keep
+# alive.
 SITE = "mkrun"
 SITE_LIVE = "https://mkrun-dcd.pages.dev"
 

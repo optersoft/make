@@ -20,9 +20,10 @@ tasks in the same commit.
 
 The third thing in the tree is **`site/`**, which is not a distribution: the landing page at
 https://mkrun-dcd.pages.dev, static files with no build step, published to the Cloudflare Pages
-project `mkrun` by direct upload (`mk site.deploy`, or a push to `main` touching `site/`). Its
-`index.html` is the **single source for the changelog** — there is deliberately no root
-`CHANGELOG.md` to drift from it. See `site/README.md`.
+project `mkrun` by direct upload (`mk site.deploy`, or a push to `main` touching `site/`). It
+makes the case for using the tool and links out; it is **not documentation and not a release
+feed** — deliberately no changelog, because a hand-deployed page that has to be updated on
+every commit is a page that is wrong most of the time. See `site/README.md`.
 
 ⚠️ **`optersoft-make` no longer lives here.** It was the second member (`optersoft/`) until
 2026-08-17, when it moved to the private `make-optersoft` repo (on the forge,

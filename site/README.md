@@ -4,8 +4,8 @@ The landing page for `mkrun` — **https://mkrun-dcd.pages.dev**.
 
 Static files, no build step: what is in this directory is what Cloudflare Pages serves, so
 `mk site.serve` shows exactly what a deploy publishes. There is no framework on purpose — the
-page is a description, four links and a changelog, and a toolchain for that would be a second
-thing to keep alive.
+page is a description, the case for using the tool and four links, and a toolchain for that
+would be a second thing to keep alive.
 
 ```console
 $ mk site.serve          # http://localhost:8100
@@ -15,17 +15,20 @@ $ mk site.smoke          # the live page answers, and still carries every link
 
 | File | What it is |
 |---|---|
-| `index.html` | the whole page: description, example, comparison, changelog |
+| `index.html` | the whole page: description, example, who it is for, why, direction |
 | `404.html` | served by Pages, with a 404 status, for any unmatched path |
 | `style.css` | the only stylesheet; no fonts, no scripts, no third-party requests |
 | `_headers` | CSP and caching, applied by Pages at the edge |
 | `robots.txt`, `sitemap.xml`, `favicon.svg` | the usual |
 
-## The changelog lives here
+## What belongs here, and what does not
 
-`index.html` is the single source for the changelog — there is no `CHANGELOG.md` at the repo
-root to drift from it. Add an entry under **Unreleased** as the change lands, and rename that
-block to the version when `mk dist.release` tags it.
+The page makes the case for using the tool: what it is, who it is for, why it is worth the
+runtime it costs, and where it is going. It is not documentation — the authoring API lives in
+the README, the reasoning in `docs/design.md`, the tutorial on
+[academy](https://academy.optersoft.com/project/make) — and it is not a release feed; releases
+are tags. Anything that has to be updated on every commit does not belong on a page that is
+deployed by hand.
 
 ## Deploying
 

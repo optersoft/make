@@ -1,12 +1,10 @@
 # Coming from `just`
 
-`just` is a good dispatcher wrapped around a language that recipes outgrow. Once
-a task body has a loop, an `if`, or three variables that must agree, you are
-writing shell inside string interpolation with no types, no tests, and no way to
-share it except copying a file.
+A reference for a repository that already has a `justfile`. It is a mapping, not
+an argument: what each construct you are using is called here.
 
-Migration is incremental and reversible: add a `Makefile.py`, keep the
-`justfile`, and have the old names delegate while the new ones are proven.
+Migration is incremental and reversible. Add a `Makefile.py`, keep the `justfile`,
+and have the old names delegate while the new ones are proven:
 
 ```make
 # justfile -- unchanged names, new implementation
@@ -14,9 +12,8 @@ web-start *ARGS:
     @mk web.start {{ ARGS }}
 ```
 
-Retire a group from the justfile only once its `make` version has run for a
-while. To roll back entirely, delete `Makefile.py`; the justfile never stopped
-working.
+Retire a group from the justfile only once its `make` version has run for a while.
+To roll back entirely, delete `Makefile.py`; the justfile never stopped working.
 
 ## Translation table
 
@@ -44,16 +41,13 @@ working.
 | `source_directory()` | `Path(__file__).parent` |
 | `just -f other.just <recipe>` | `mk -F other/Makefile.py <recipe>` |
 
-## What `just` still does better
+## Two things to keep in mind
 
-- **Startup.** `just` starts in about 5 ms; this takes about 30 ms. Both are
-  imperceptible, but `just` is genuinely faster, and staying under a 150 ms
-  budget here is an explicit, tested constraint rather than a free property.
-- **One binary, no runtime.** `just` is a single Rust binary. This needs Python,
-  and shared task packages need `uv`.
-- **Bash is right for one-liners.** A task that is genuinely `cargo test` is
-  shorter in a justfile. `sh.bash(...)` exists so such a body can move across
-  verbatim and stay that way.
+- **A justfile can stay.** Nothing here wants the whole file migrated at once, and
+  a recipe that is genuinely one line of bash is fine where it is; `sh.bash(...)`
+  is there for when you do move it and want it verbatim.
+- **`mk` needs a runtime.** Python 3.11+, plus `uv` for shared task packages,
+  where a justfile needed one binary. On a machine where that is not available,
+  stay put.
 
-The case for switching is not that `just` is bad. It is that recipes stop being
-one-liners, and the language does not grow with them.
+Why this tool works the way it does, decision by decision: [`design.md`](design.md).

@@ -26,7 +26,7 @@ directory someone `git clone`d.
 $ uv tool install mkrun          # installs one command: mk
 ```
 
-[mkrun-dcd.pages.dev](https://mkrun-dcd.pages.dev) — the page version, with the changelog.
+[mkrun-dcd.pages.dev](https://mkrun-dcd.pages.dev) — the short version, on one page.
 The step-by-step tutorial is on [academy](https://academy.optersoft.com/project/make).
 
 **Three names, deliberately different.** The PyPI distribution is `mkrun`, the
@@ -48,33 +48,119 @@ $ alias make=mk
 
 ---
 
-## Why
+## Is this for you?
 
-`just` is a good dispatcher wrapped around a language that recipes outgrow. Once
-a task body has a loop, an `if`, or three variables that must agree, you are
-writing shell inside string interpolation with no types, no tests, and no way to
-share it except copying a file.
+You have a repository with a handful of commands worth remembering — build, test,
+run the dev server, cut a release, reset the database — and they currently live in
+a `scripts/` folder, a `package.json`, a shell history, or a wiki page. It works
+until one of them needs a loop, a condition, or three values that must agree, and
+until a second repository needs the same command and you copy it.
 
-|  | `just` | `make` |
-|---|---|---|
-| Task body | bash, with `{{ }}` spliced in **as text** | Python; values are values |
-| Arguments | positional strings | typed, from the signature — `int`, `Path`, `Literal`, `list[str]` |
-| Required input | omit the default so it becomes a *parse error* | declared, with an error naming the field and where to set it |
-| Namespacing | one flat namespace, `web-`/`box-` prefixes by convention | modules: `web.start`, `box.ls` |
-| Overriding a shared task | impossible — duplicates are fatal | `@task(override="web.start")`, and `abstract=True` upstream |
-| Sharing | `git clone --depth 1` into a gitignored directory | a PyPI (or git) dependency, resolved and locked by uv |
-| Pinning | none — every checkout is on some HEAD | `mk --sync` → a lockfile |
-| Testing | `just --fmt --check` (it parses) | `pytest`, with a command recorder |
-| Dry run | text expansion | every command actually suppressed |
+`make` is for that moment. A task is a Python function, so the moment a task
+outgrows one line you already have the language you need — and you did not have to
+rewrite it to get there.
 
-Nothing here is theoretical. Every row is something that cost real bugs in a
-fleet of five repositories sharing 1100 lines of `just` — a teardown that reaped
-the wrong thing, a worktree that silently started with no environment at all, an
-export that was a no-op for two repos out of five. All of them are properties of
-small functions, and all of them are tests now.
+**You will get the most out of it if:**
 
-`docs/why.md` names them, one by one, with the commits. Migrating, including the
-full translation table: `docs/from-just.md`.
+- your tasks take arguments, and you would rather declare them than parse them;
+- more than one repository runs the same commands, and you want one version of
+  them rather than several copies that have drifted;
+- a mistake in a task is expensive — it deploys, kills, deletes, or uploads — and
+  you want a dry run and a test rather than care;
+- your team is polyglot: the tasks are Python, whatever they drive is not.
+
+**You probably do not need it if** your repository has one command and it is
+`cargo test`, or if you cannot have Python on the machines that run the tasks.
+
+## Why it is worth it
+
+### The command line is the signature
+
+Every other runner asks you to describe the arguments twice: once for the parser
+and once for the function. Here the signature *is* the interface — types, defaults,
+required-ness, help text, shell completions and the `--help` output all come from
+it, and they cannot fall out of sync with the body because there is nothing to
+keep in sync.
+
+### Values stay values
+
+There is no interpolation step anywhere. `sh()` takes an argv list, so a filename
+with a space, a commit message with a quote, a password with a `$` is data and can
+never become syntax. The one place shell is genuinely the right tool —
+`sh.pipe("du -sk target | cut -f1")` — is spelled differently, so it is visible in
+review.
+
+### Tasks are code, so they are testable
+
+A task is an importable function, and `make.testing` records what it would have
+run. That turns "does the teardown reap the right process" from something you find
+out during an incident into a three-line unit test that runs in CI.
+
+```python
+def test_the_teardown_reaps_the_lock_holder(recorder):
+    stop()
+    assert recorder.commands == [["kill", "-TERM", "4711"]]
+```
+
+### The dry run is real
+
+`--dry-run` suppresses every command, every file write through `fs`, every poll,
+every HTTP call and every process signal — not a printed expansion of what a
+string would have become. Reads are untouched, so the dry run follows the same
+branches the real run does.
+
+### Configuration fails with instructions
+
+A shared task declares what it needs as a typed dataclass. A missing value stops
+before anything runs, and the error names the field, its type, and all three
+places it can be set — the task file, `make.toml`, or the environment.
+
+### Sharing is a dependency, not a copy
+
+Tasks ship as ordinary Python packages. A consumer names the package, `mk --sync`
+writes a lock file, and upgrading is a version bump in a diff. Nothing is cloned
+into a gitignored directory at whatever `HEAD` happened to be; nothing silently
+diverges between repositories.
+
+### Namespaces, and a way out of them
+
+Groups give real names — `web.start`, `db.reset` — rather than prefix conventions.
+A task you inherit from a shared package can be replaced with
+`@task(override="web.start")`, and a package can declare a task `abstract=True` to
+say *you must supply this*. Both are checked: overriding something that no longer
+exists is an error, not a silently unused function.
+
+### It stays fast
+
+A task list is about 30 ms, with a 150 ms budget enforced by a test in this
+repository's own suite. Groups import lazily, so a task package you are not using
+costs nothing.
+
+## What it costs
+
+Honesty is worth more than a clean sweep:
+
+- **A runtime.** Python 3.11+, and `uv` for shared task packages. A single static
+  binary this is not.
+- **~30 ms, not ~5 ms.** Imperceptible in use, but it is a real number and it is
+  guarded by a test rather than free.
+- **Alpha.** The authoring API is stable in practice; the internals move.
+
+## Direction
+
+- **The authoring API settles first.** `@task`, `sh`, `fs`, `config`, `env` and
+  `testing` are what everything is built on. A 1.0 means those stopped moving.
+- **It is a command runner, not a build system.** File targets and staleness
+  graphs were tried and removed: `cargo`, `npm`, `uv` and every compiler already
+  do that job for their own inputs, and a second, worse dependency graph on top of
+  them is a source of wrong answers. Tasks depend on tasks (`needs=`), and that is
+  the whole model.
+- **The runner stays generic.** Tasks that wrap a tool belong beside that tool, as
+  its own `<project>-make` package. Nothing tool-specific ships inside `mkrun`.
+- **Bodies stay Python.** No DSL, no template language, no configuration format
+  that grows conditionals.
+- **Startup stays under budget.** A runner typed dozens of times a day gets
+  abandoned the moment it stops feeling instant.
 
 ## Tasks
 
@@ -262,9 +348,9 @@ env.layered()      # ~/.make/secrets.env -> ~/.make/<repo>.env -> ./.env
 
 Later layers win, but a variable exported by the caller still beats all of them.
 `<repo>` resolves through `git rev-parse --git-common-dir`, so it is the *main*
-checkout's name even from inside a linked worktree — the failure mode where a
-worktree silently starts with no application environment at all. `~/.just/` is
-read too, so an existing setup keeps working.
+checkout's name even from inside a linked worktree — otherwise a worktree finds no
+file and starts with no application environment at all, silently, because a
+missing layer is not an error.
 
 ## Sharing tasks
 
@@ -397,24 +483,26 @@ an error, since nothing should write into a repository unasked.
 
 ## Repository layout
 
-`src/` is this tool. `optersoft/` is a second, separate distribution —
-`optersoft-make`, the author's own fleet tasks — kept here as a uv workspace
-member so a change to the runner is tested against real tasks in the same
-commit. It is excluded from the `mkrun` sdist and wheel; installing this tool
-never installs it.
+`src/make/` is this tool, published as `mkrun`. `rust/` is a second, separate
+distribution — `make-rust`, generic cargo hygiene tasks — kept here as a uv
+workspace member so a change to the runner is tested against real tasks in the
+same commit. It is excluded from the `mkrun` sdist and wheel; installing this tool
+never installs it. `site/` is the landing page.
 
-That directory is named after its *owner*, not after this repository, because
-that is the convention the tool encourages: a project ships its tasks in its
-own `make/` directory, as `<project>-make`, and consumers name the source.
-`hetzner-make` (the `box` group, beside the `hetzner-box` CLI it wraps) is the
-first one; `optersoft-make` is what is left once every group that belongs to a
-project has gone to live there.
+`rust/` is generic on purpose, because that is the convention the tool encourages:
+a project ships its tasks in its own `make/` directory, as `<project>-make`, and
+consumers name the source. Only groups that wrap something *nobody* owns — cargo —
+belong beside the runner.
 
 ## Status
 
-Alpha. The task-authoring API — `@task`, `sh`, `fs`, `config`, `env` — is
-what a private fleet of seven task groups is already built on, and is not
-expected to change shape. The internals may.
+Alpha. The task-authoring API — `@task`, `sh`, `fs`, `config`, `env` — is what
+several task packages are already built on and is not expected to change shape.
+The internals may. Releases are tagged in this repository and published to PyPI
+from CI.
+
+Why it works the way it does, decision by decision: [`docs/design.md`](docs/design.md).
+Coming from `just`: [`docs/from-just.md`](docs/from-just.md).
 
 Issues are welcome; there is no support guarantee.
 

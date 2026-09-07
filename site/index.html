@@ -24,7 +24,7 @@
     <li><a href="https://pypi.org/project/mkrun/">PyPI · mkrun</a></li>
     <li><a href="https://github.com/optersoft/make">GitHub · optersoft/make</a></li>
     <li><a href="https://academy.optersoft.com/project/make">Tutorial · academy</a></li>
-    <li><a href="#changelog">Changelog</a></li>
+    <li><a href="#worth">Why it is worth it</a></li>
   </ul>
 
   <div class="term">
@@ -94,95 +94,109 @@
   </div>
 </section>
 
-<section id="why">
-  <h2>Why not just <code>just</code></h2>
-  <p class="lead"><code>just</code> is a good dispatcher wrapped around a language that recipes
-  outgrow. Once a task body has a loop, an <code>if</code>, or three variables that must agree,
-  you are writing shell inside string interpolation with no types, no tests, and no way to share
-  it except copying a file.</p>
+<section id="who">
+  <h2>Is this for you?</h2>
+  <p class="lead">You have a repository with a handful of commands worth remembering — build,
+  test, run the dev server, cut a release, reset the database — and today they live in a
+  <code>scripts/</code> folder, a <code>package.json</code>, a shell history or a wiki page.
+  That works until one of them needs a loop, a condition, or three values that must agree,
+  and until a second repository needs the same command and you copy it.</p>
 
-  <div class="table-scroll">
-  <table>
-    <thead><tr><th></th><th><code>just</code></th><th><code>mk</code></th></tr></thead>
-    <tbody>
-      <tr><td>Task body</td><td>bash, with <code>{{ }}</code> spliced in as text</td><td>Python; values are values</td></tr>
-      <tr><td>Arguments</td><td>positional strings</td><td>typed, from the signature</td></tr>
-      <tr><td>Namespacing</td><td>one flat namespace, by convention</td><td>modules: <code>web.start</code></td></tr>
-      <tr><td>Overriding a shared task</td><td>impossible — duplicates are fatal</td><td><code>@task(override=…)</code></td></tr>
-      <tr><td>Sharing</td><td><code>git clone --depth 1</code></td><td>a PyPI (or git) dependency</td></tr>
-      <tr><td>Pinning</td><td>none — every checkout is on some HEAD</td><td><code>mk --sync</code> → a lock file</td></tr>
-      <tr><td>Testing</td><td>it parses</td><td><code>pytest</code>, with a command recorder</td></tr>
-      <tr><td>Dry run</td><td>text expansion</td><td>every command actually suppressed</td></tr>
-    </tbody>
-  </table>
+  <p>This is for that moment. A task is a Python function, so when a task outgrows one line
+  you already have the language you need — you did not have to rewrite it to get there.</p>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Worth it if…</h3>
+      <p>your tasks take arguments; more than one repository runs the same commands; a mistake
+      in a task deploys, kills or deletes something; your team is polyglot and only the tasks
+      are Python.</p>
+    </div>
+    <div class="card">
+      <h3>Probably not if…</h3>
+      <p>your repository has one command and it is <code>cargo test</code>, or you cannot have
+      Python on the machines that run the tasks.</p>
+    </div>
   </div>
+</section>
 
-  <p>Every row is something that cost a real bug in a fleet of five repositories sharing 1100
-  lines of <code>just</code>. They are named one by one, with the commits, in
-  <a href="https://github.com/optersoft/make/blob/main/docs/why.md">docs/why.md</a>; the
-  translation table for migrating is
+<section id="worth">
+  <h2>Why it is worth it</h2>
+
+  <h3>The command line is the signature</h3>
+  <p>Types, defaults, required-ness, help text and completions all come from the parameters.
+  There is no second description to keep in sync, because there is no second description.</p>
+
+  <h3>Values stay values</h3>
+  <p>No interpolation step exists. A filename with a space, a commit message with a quote, a
+  password with a <code>$</code> is data and cannot become syntax — not because it was escaped,
+  but because there is no parser downstream to escape it from. Where shell genuinely is the
+  right tool, <code>sh.pipe(…)</code> says so in the source.</p>
+
+  <h3>Tasks are code, so they are testable</h3>
+  <p>The bugs that hurt are never in the dispatch. They are in the twelve lines that decide
+  <em>which</em> process to kill or <em>which</em> file to read — and those lines are an
+  importable function here, with a recorder that captures what a task would have run.</p>
+
+<pre class="code"><span class="k">def</span> test_the_teardown_reaps_the_lock_holder(recorder):
+    stop()
+    <span class="k">assert</span> recorder.commands == [[<span class="k">"kill"</span>, <span class="k">"-TERM"</span>, <span class="k">"4711"</span>]]</pre>
+
+  <h3>The dry run is real</h3>
+  <p><code>--dry-run</code> suppresses every command, every file write, every poll, HTTP call
+  and process signal — it does not print an expansion and then still write the file. Reads are
+  untouched, so a dry run takes the same branches the real run does.</p>
+
+  <h3>Configuration fails with instructions</h3>
+  <p>A shared task declares what it needs as a typed section. A missing value stops before
+  anything runs, and the error names the field, its type, and all three places it can be set:
+  the task file, <code>make.toml</code>, or the environment.</p>
+
+  <h3>Sharing is a dependency, not a copy</h3>
+  <p>Tasks ship as ordinary Python packages. <code>mk --sync</code> writes a lock file and
+  upgrading is a version bump in a diff — instead of a directory cloned into every repository
+  at whatever <code>HEAD</code> happened to be, quietly diverging.</p>
+
+  <h3>It stays fast</h3>
+  <p>About 30&nbsp;ms to a task list, with a 150&nbsp;ms budget enforced by a test. Groups
+  import lazily, so a task package you are not using costs nothing.</p>
+
+  <p>The full reasoning, decision by decision, is in
+  <a href="https://github.com/optersoft/make/blob/main/docs/design.md">docs/design.md</a>.
+  If you are coming from a <code>justfile</code>, the mapping is in
   <a href="https://github.com/optersoft/make/blob/main/docs/from-just.md">docs/from-just.md</a>.</p>
 </section>
 
-<section id="changelog">
-  <h2>Changelog</h2>
-  <p class="lead">Releases are tagged in the repository and published to PyPI from CI through
-  Trusted Publishing. <code>make-rust</code> — the generic cargo-hygiene group in
-  <code>rust/</code> — ships from the same repository on its own schedule.</p>
+<section id="direction">
+  <h2>What it costs, and where it is going</h2>
+  <p class="lead">It needs a runtime — Python 3.11+, and <code>uv</code> for shared task
+  packages — and it starts in ~30&nbsp;ms rather than instantly. It is alpha: the authoring
+  API is stable in practice, the internals still move.</p>
 
-  <div class="release">
-    <h3>Unreleased <span class="date">on <code>main</code></span></h3>
-    <ul>
-      <li><code>sh(heartbeat=…)</code> — a long silent command says it is still alive.</li>
-      <li><code>fs.copytree()</code>, the dry-run-aware directory copy.</li>
-      <li>A repository with no <code>Makefile.py</code> is offered one, instead of being shown a demo.</li>
-      <li><code>--doctor</code> checks that the task names in the file's docstring are real tasks.</li>
-    </ul>
-  </div>
-
-  <div class="release">
-    <h3>0.4.0 <span class="date">2026-09-03</span> <span class="tag">latest</span></h3>
-    <ul>
-      <li>A group can answer to a short name — <code>dx.start</code> reaches
-      <code>dioxus.start</code>. The alias is an input spelling only: help, <code>--list</code>,
-      <code>needs=</code> and errors keep the real name.</li>
-      <li>The fleet-specific task package moved out of this repository, and the generic
-      <code>make-rust</code> moved in — so the runner can be public without shipping anyone's
-      private tasks.</li>
-      <li><code>rust.gc</code>, which collects the superseded <code>name-&lt;hash&gt;</code>
-      artifacts cargo appends and never deletes — churn a time-based sweep cannot see.</li>
-      <li><code>rust.config</code> installs a machine-wide debuginfo policy in
-      <code>~/.cargo/config.toml</code>, in a managed block.</li>
-    </ul>
-  </div>
-
-  <div class="release">
-    <h3>0.3.0 <span class="date">2026-08-17</span></h3>
-    <ul>
-      <li>The three loops every task file hand-rolled in bash are primitives:
-      <code>poll()</code>, <code>http</code> and <code>proc</code> — each honouring
-      <code>--dry-run</code>.</li>
-      <li>The documented examples became real task files, not sketches.</li>
-    </ul>
-  </div>
-
-  <div class="release">
-    <h3>0.2.0 <span class="date">2026-08-14</span></h3>
-    <ul>
-      <li>The command is <code>mk</code>; nothing installs a <code>make</code> script.</li>
-      <li>The unit is a <em>task</em>, not a recipe — in the API, the help and the docs.</li>
-      <li>A task package belongs to the project it wraps, and a consumer names the source per
-      package in <code>[tool.uv.sources]</code>.</li>
-    </ul>
-  </div>
-
-  <div class="release">
-    <h3>0.1.0 <span class="date">2026-08-09</span></h3>
-    <ul>
-      <li>First release: tasks from a signature, groups, <code>needs</code>/<code>requires</code>,
-      <code>sh</code>, <code>fs</code>, <code>config</code>, <code>env</code> and the testing
-      recorder.</li>
-    </ul>
+  <div class="grid">
+    <div class="card">
+      <h3>The authoring API settles first</h3>
+      <p><code>@task</code>, <code>sh</code>, <code>fs</code>, <code>config</code>,
+      <code>env</code> and <code>testing</code> are what everything is built on. A 1.0 means
+      those stopped moving.</p>
+    </div>
+    <div class="card">
+      <h3>A runner, not a build system</h3>
+      <p>File targets and staleness graphs were tried and removed. Compilers already track
+      their own inputs; a second, worse graph on top produces confident wrong answers. Tasks
+      depend on tasks.</p>
+    </div>
+    <div class="card">
+      <h3>The runner stays generic</h3>
+      <p>Tasks that wrap a tool belong beside that tool, as its own
+      <code>&lt;project&gt;-make</code> package. Nothing tool-specific ships inside
+      <code>mkrun</code>.</p>
+    </div>
+    <div class="card">
+      <h3>Bodies stay Python</h3>
+      <p>No DSL, no template language, no configuration format that slowly grows conditionals.
+      And startup stays under budget.</p>
+    </div>
   </div>
 </section>
 
@@ -195,7 +209,8 @@
 <span class="p">$</span> mk --list                      <span class="c"># every task, with its help</span>
 <span class="p">$</span> mk --doctor                    <span class="c"># where each task package resolved from</span></pre>
   </div>
-  <p>The full authoring API — <code>@task</code>, <code>sh</code>, <code>fs</code>,
+  <p>Releases are tagged in the repository and published to PyPI from CI.
+  The full authoring API — <code>@task</code>, <code>sh</code>, <code>fs</code>,
   <code>config</code>, <code>env</code>, <code>testing</code> — is in the
   <a href="https://github.com/optersoft/make#readme">README</a>. The step-by-step tutorial is on
   <a href="https://academy.optersoft.com/project/make">academy</a>.</p>
