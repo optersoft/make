@@ -1,0 +1,14 @@
+# Reading this site makes no third-party request: one stylesheet, one inline
+# SVG icon, no fonts, no analytics, no scripts. The CSP says so, so that a
+# future edit that adds one fails loudly instead of quietly shipping.
+/*
+  Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Content-Type-Options: nosniff
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+/style.css
+  Cache-Control: public, max-age=3600
+
+/favicon.svg
+  Cache-Control: public, max-age=86400

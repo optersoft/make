@@ -1,0 +1,202 @@
+/* One stylesheet, no fonts, no third-party requests: reading this page makes
+   no request to anything but the origin it came from. */
+
+:root {
+  color-scheme: light dark;
+  --bg: #fbfaf8;
+  --panel: #ffffff;
+  --ink: #16150f;
+  --muted: #5d5a50;
+  --line: #e2ded4;
+  --accent: #9a4a00;
+  --code-bg: #f3f0e9;
+  --term-bg: #201e1a;
+  --term-ink: #e8e3d8;
+  --term-dim: #8f887a;
+  --term-accent: #e0a45c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14130f;
+    --panel: #1b1a15;
+    --ink: #eae5da;
+    --muted: #9d968a;
+    --line: #2e2c25;
+    --accent: #e0a45c;
+    --code-bg: #211f1a;
+    --term-bg: #0e0d0b;
+    --term-ink: #e8e3d8;
+    --term-dim: #8f887a;
+    --term-accent: #e0a45c;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+code, pre, kbd {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9em;
+}
+
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:hover { text-decoration-thickness: 2px; }
+
+.wrap { max-width: 60rem; margin: 0 auto; padding: 0 1.25rem; }
+
+/* Header ------------------------------------------------------------------ */
+
+header { padding: 4rem 0 2.5rem; }
+
+h1 {
+  margin: 0;
+  font-size: clamp(2.4rem, 7vw, 3.4rem);
+  letter-spacing: -0.03em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+h1 .cursor { color: var(--accent); }
+
+.tagline {
+  margin: 0.4rem 0 0;
+  font-size: clamp(1.1rem, 3vw, 1.35rem);
+  color: var(--muted);
+  max-width: 34rem;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  margin: 1.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.links a {
+  display: inline-block;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.links a:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Terminal / code --------------------------------------------------------- */
+
+.term {
+  background: var(--term-bg);
+  color: var(--term-ink);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  border: 1px solid var(--line);
+}
+
+.term pre { margin: 0; }
+.term .p { color: var(--term-accent); }
+.term .c { color: var(--term-dim); }
+
+pre.code {
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+  margin: 1.25rem 0;
+}
+
+pre.code .c { color: var(--muted); }
+pre.code .k { color: var(--accent); }
+
+/* Sections ---------------------------------------------------------------- */
+
+section { padding: 2.5rem 0; border-top: 1px solid var(--line); }
+
+h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+}
+
+h3 { margin: 1.75rem 0 0.4rem; font-size: 1.05rem; }
+
+p { max-width: 44rem; }
+
+.lead { color: var(--muted); }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+}
+
+.card h3 { margin: 0 0 0.35rem; font-size: 1rem; }
+.card p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+
+.table-scroll { overflow-x: auto; }
+
+table { border-collapse: collapse; width: 100%; margin-top: 1rem; font-size: 0.95rem; }
+th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+
+/* Changelog --------------------------------------------------------------- */
+
+.release { margin: 1.75rem 0 0; }
+
+.release h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 0 0 0.4rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.release .date { color: var(--muted); font-size: 0.85rem; font-weight: 400; }
+
+.tag {
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.release ul { margin: 0; padding-left: 1.15rem; max-width: 44rem; }
+.release li { margin: 0.2rem 0; }
+.release li .why { color: var(--muted); }
+
+footer {
+  border-top: 1px solid var(--line);
+  padding: 2rem 0 3rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+footer a { color: inherit; }

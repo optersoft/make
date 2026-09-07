@@ -1,0 +1,78 @@
+# The landing page in site/ -> the Cloudflare Pages project `mkrun`
+# (https://mkrun-dcd.pages.dev), by direct upload.
+#
+# There is no build step: site/ is what gets served, so `mk site.serve` shows
+# exactly what a deploy publishes. The check job only guards what
+# a static page can still get wrong -- a link that 404s, a stray third-party
+# origin -- and the deploy job runs on a push to main that touched site/.
+#
+# `deploy` needs two repository secrets: CLOUDFLARE_API_TOKEN (an API token
+# with "Cloudflare Pages - Edit" on the optersoft account) and
+# CLOUDFLARE_ACCOUNT_ID. Until they exist the job skips itself and says so,
+# rather than failing every push.
+name: Site
+
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", ".github/workflows/site.yml"]
+  pull_request:
+    paths: ["site/**", ".github/workflows/site.yml"]
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The page claims that reading it makes no third-party request: one
+      # stylesheet, one inline SVG icon, no fonts, no scripts. Only link
+      # targets may appear as foreign origins.
+      - name: no foreign origins beyond link targets
+        run: |
+          set -euo pipefail
+          allowed='optersoft\.com|pypi\.org|github\.com|www\.sitemaps\.org|www\.w3\.org|mkrun-dcd\.pages\.dev'
+          found=$(grep -rhoE 'https?://[a-z0-9.-]+' site --include='*.html' --include='*.css' \
+            | sort -u | grep -vE "$allowed" || true)
+          if [ -n "$found" ]; then echo "unexpected origins:"; echo "$found"; exit 1; fi
+      - name: every outbound link answers
+        run: |
+          set -euo pipefail
+          urls=$(grep -rhoE 'https://[^"]+' site/index.html | sort -u)
+          fail=0
+          for url in $urls; do
+            code=$(curl -sSL -o /dev/null -w '%{http_code}' --max-time 20 "$url" || echo 000)
+            echo "$code $url"
+            case "$code" in 2*|3*) ;; *) fail=1 ;; esac
+          done
+          exit $fail
+
+  deploy:
+    needs: check
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: site
+      url: https://mkrun-dcd.pages.dev
+    steps:
+      - name: token present?
+        id: token
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN is not set - skipping the deploy (see the header of this file)"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.token.outputs.present == 'true'
+      # `--branch main` is what makes this the PRODUCTION deployment; without
+      # it wrangler infers the branch and anything else lands as a preview.
+      - uses: cloudflare/wrangler-action@v3
+        if: steps.token.outputs.present == 'true'
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy site --project-name mkrun --branch main --commit-hash ${{ github.sha }}

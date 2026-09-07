@@ -26,6 +26,9 @@ directory someone `git clone`d.
 $ uv tool install mkrun          # installs one command: mk
 ```
 
+[mkrun-dcd.pages.dev](https://mkrun-dcd.pages.dev) — the page version, with the changelog.
+The step-by-step tutorial is on [academy](https://academy.optersoft.com/project/make).
+
 **Three names, deliberately different.** The PyPI distribution is `mkrun`, the
 import name is `make`, and the command is `mk` — all independent, the same way
 `pip install pillow` gives you `import PIL`. The distribution is not `make` or

@@ -7,3 +7,6 @@ dist/
 build/
 *.egg-info/
 .env
+
+# wrangler caches its Pages upload state here (site/ is deployed by direct upload).
+.wrangler/

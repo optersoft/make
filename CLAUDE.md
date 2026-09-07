@@ -18,6 +18,12 @@ They are packaged separately and resolved together: `[tool.uv.workspace] members
 with `mkrun = { workspace = true }` in the member, so a runner change is tested against real
 tasks in the same commit.
 
+The third thing in the tree is **`site/`**, which is not a distribution: the landing page at
+https://mkrun-dcd.pages.dev, static files with no build step, published to the Cloudflare Pages
+project `mkrun` by direct upload (`mk site.deploy`, or a push to `main` touching `site/`). Its
+`index.html` is the **single source for the changelog** — there is deliberately no root
+`CHANGELOG.md` to drift from it. See `site/README.md`.
+
 ⚠️ **`optersoft-make` no longer lives here.** It was the second member (`optersoft/`) until
 2026-08-17, when it moved to the private `make-optersoft` repo (on the forge,
 `code.optersoft.com/make-optersoft.git`) so this one can go public without shipping any of the

@@ -1,6 +1,12 @@
 """Tasks for developing `make` itself -- and the first thing that dogfoods it.
 
-Run `make` with no arguments to see them.
+    mk dev.check      lint + both test suites: everything CI runs
+    mk dev.bench      startup latency against the 150ms budget
+    mk dist.release   tag a version, which publishes to PyPI from CI
+    mk site.serve     the landing page in site/, locally
+    mk site.deploy    publish site/ to Cloudflare Pages (production)
+
+Run `mk` with no arguments to see them all.
 """
 
 from __future__ import annotations
@@ -128,3 +134,79 @@ def completions(shell: str = "zsh") -> None:
     from make.completions import emit
 
     print(emit(shell))
+
+
+# The landing page in site/ -- static files, no build step, published to the
+# Cloudflare Pages project `mkrun` by direct upload. There is no framework and
+# nothing to compile on purpose: the page is a description, four links and a
+# changelog, and a toolchain for that is a second thing to keep alive.
+SITE = "mkrun"
+SITE_LIVE = "https://mkrun-dcd.pages.dev"
+
+
+@task(group="site")
+def serve(*, port: int = 8100) -> None:
+    """Serve site/ locally, exactly as Pages will (no build step)."""
+    from make import ctx
+
+    step(f"http://localhost:{port} -- ctrl-c to stop")
+    sh("python3", "-m", "http.server", str(port), "--directory", str(ctx.root / "site"))
+
+
+@task(group="site", requires=["wrangler"])
+def dev(*, port: int = 8101) -> None:
+    """Serve site/ through the Pages runtime, so `_headers` and 404.html apply.
+
+    `site.serve` is a plain file server -- fine for editing prose, but it does
+    not apply the CSP in `_headers` and answers 200 for a missing path. This
+    runs what the edge runs, with live reload.
+    """
+    from make import ctx
+
+    step(f"http://localhost:{port} -- the Pages runtime, ctrl-c to stop")
+    sh("wrangler", "pages", "dev", str(ctx.root / "site"), "--port", str(port), "--live-reload")
+
+
+@task(group="site", requires=["wrangler"], dangerous=True)
+def deploy() -> None:
+    """Publish site/ to Cloudflare Pages as the production deployment.
+
+    Auth is wrangler's: `CLOUDFLARE_API_TOKEN`, else a cached `wrangler login`.
+    `--branch main` is what makes this PRODUCTION -- without it wrangler infers
+    the branch from git and anything but main lands as a preview that never
+    reaches the live URL.
+    """
+    step(f"deploying site/ to Cloudflare Pages ({SITE})")
+    sh(
+        "wrangler",
+        "pages",
+        "deploy",
+        "site",
+        "--project-name",
+        SITE,
+        "--branch",
+        "main",
+        "--commit-dirty=true",
+    )
+    note(f"done -- {SITE_LIVE}")
+
+
+@task(group="site")
+def smoke(*, base: str = SITE_LIVE) -> None:
+    """Check the live page: it answers 200 and still carries every outbound link."""
+    from make import http
+
+    # Cloudflare's bot management answers 403 to urllib's default User-Agent,
+    # so the page looks broken from a check that does not send a browser one.
+    browser = {"User-Agent": "Mozilla/5.0 (mk site.smoke)"}
+
+    for path, expected in ((f"{base}/", 200), (f"{base}/style.css", 200), (f"{base}/nowhere", 404)):
+        got = http.get(path, headers=browser).status
+        if got != expected:
+            raise SystemExit(f"{path}: expected {expected}, got {got}")
+
+    page = http.get(f"{base}/", headers=browser).body
+    for link in ("pypi.org/project/mkrun", "github.com/optersoft/make", "academy.optersoft.com/project/make"):
+        if link not in page:
+            raise SystemExit(f"the live page no longer links to {link}")
+    note(f"{base} is live, with all three links")

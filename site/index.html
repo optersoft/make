@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mkrun — a command runner whose tasks are Python</title>
+<meta name="description" content="mkrun is a command runner whose tasks are ordinary Python functions: the command line comes from the signature, and task packages ship on PyPI instead of being copied between repositories.">
+<link rel="canonical" href="https://mkrun-dcd.pages.dev/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="mkrun — a command runner whose tasks are Python">
+<meta property="og:description" content="The command line comes from the function signature. Tasks are importable, testable, and shareable as versioned packages.">
+<meta property="og:url" content="https://mkrun-dcd.pages.dev/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header class="wrap">
+  <h1>mk<span class="cursor">_</span></h1>
+  <p class="tagline">A command runner whose tasks are Python. The command line comes from the
+  function signature, so there is no second schema to keep in sync.</p>
+
+  <ul class="links">
+    <li><a href="https://pypi.org/project/mkrun/">PyPI · mkrun</a></li>
+    <li><a href="https://github.com/optersoft/make">GitHub · optersoft/make</a></li>
+    <li><a href="https://academy.optersoft.com/project/make">Tutorial · academy</a></li>
+    <li><a href="#changelog">Changelog</a></li>
+  </ul>
+
+  <div class="term">
+<pre><span class="c"># install the runner -- one command, `mk`</span>
+<span class="p">$</span> uv tool install mkrun
+
+<span class="c"># then, in any repository with a Makefile.py</span>
+<span class="p">$</span> mk app.test --fast
+<span class="p">$</span> cargo test --lib</pre>
+  </div>
+</header>
+
+<main class="wrap">
+
+<section id="what">
+  <h2>What it is</h2>
+  <p class="lead">A task file is Python. A task is a function with a docstring; its parameters
+  become the command line, its docstring becomes the help, and its module becomes a namespace.
+  Nothing is interpolated into a string, so a value with a space, a quote or a <code>$</code>
+  stays data.</p>
+
+<pre class="code"><span class="c"># Makefile.py</span>
+<span class="k">from</span> make <span class="k">import</span> task, sh
+
+<span class="k">@task</span>(group=<span class="k">"app"</span>, requires=[<span class="k">"cargo"</span>])
+<span class="k">def</span> test(*, fast: bool = <span class="k">False</span>) -&gt; <span class="k">None</span>:
+    <span class="c">"""Run the test suite."""</span>
+    sh(<span class="k">"cargo"</span>, <span class="k">"test"</span>, *([<span class="k">"--lib"</span>] <span class="k">if</span> fast <span class="k">else</span> []))</pre>
+
+  <p><strong>Three names, deliberately different.</strong> The distribution is
+  <code>mkrun</code>, the import is <code>make</code>, the command is <code>mk</code>.
+  Nothing installs a <code>make</code> command — that would shadow GNU make on the
+  <code>PATH</code> of every Unix machine.</p>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Typed arguments</h3>
+      <p><code>int</code>, <code>Path</code>, <code>Literal</code>, <code>list[str]</code> —
+      parsed, validated and documented from the signature alone.</p>
+    </div>
+    <div class="card">
+      <h3>No quoting hazard</h3>
+      <p><code>sh()</code> takes an argv list. Shell is opt-in, through
+      <code>sh.pipe()</code> and <code>sh.bash()</code>, because it is the hazard.</p>
+    </div>
+    <div class="card">
+      <h3>A dry run that is dry</h3>
+      <p><code>--dry-run</code> suppresses every command, every file write through
+      <code>fs</code>, every poll, HTTP call and process kill.</p>
+    </div>
+    <div class="card">
+      <h3>Tasks you can share</h3>
+      <p>A task package is a uv dependency, resolved and locked — not a directory each
+      repository <code>git clone</code>d and then quietly diverged from.</p>
+    </div>
+    <div class="card">
+      <h3>Namespaces, not prefixes</h3>
+      <p>Groups give <code>web.start</code> and <code>box.ls</code>; a group alias makes
+      <code>dx.start</code> the same task, and <code>override=</code> replaces one you
+      inherited.</p>
+    </div>
+    <div class="card">
+      <h3>Startup is a feature</h3>
+      <p>~30&nbsp;ms to a task list, with a 150&nbsp;ms budget enforced by a test. Groups
+      import lazily so an unused one costs nothing.</p>
+    </div>
+  </div>
+</section>
+
+<section id="why">
+  <h2>Why not just <code>just</code></h2>
+  <p class="lead"><code>just</code> is a good dispatcher wrapped around a language that recipes
+  outgrow. Once a task body has a loop, an <code>if</code>, or three variables that must agree,
+  you are writing shell inside string interpolation with no types, no tests, and no way to share
+  it except copying a file.</p>
+
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th></th><th><code>just</code></th><th><code>mk</code></th></tr></thead>
+    <tbody>
+      <tr><td>Task body</td><td>bash, with <code>{{ }}</code> spliced in as text</td><td>Python; values are values</td></tr>
+      <tr><td>Arguments</td><td>positional strings</td><td>typed, from the signature</td></tr>
+      <tr><td>Namespacing</td><td>one flat namespace, by convention</td><td>modules: <code>web.start</code></td></tr>
+      <tr><td>Overriding a shared task</td><td>impossible — duplicates are fatal</td><td><code>@task(override=…)</code></td></tr>
+      <tr><td>Sharing</td><td><code>git clone --depth 1</code></td><td>a PyPI (or git) dependency</td></tr>
+      <tr><td>Pinning</td><td>none — every checkout is on some HEAD</td><td><code>mk --sync</code> → a lock file</td></tr>
+      <tr><td>Testing</td><td>it parses</td><td><code>pytest</code>, with a command recorder</td></tr>
+      <tr><td>Dry run</td><td>text expansion</td><td>every command actually suppressed</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>Every row is something that cost a real bug in a fleet of five repositories sharing 1100
+  lines of <code>just</code>. They are named one by one, with the commits, in
+  <a href="https://github.com/optersoft/make/blob/main/docs/why.md">docs/why.md</a>; the
+  translation table for migrating is
+  <a href="https://github.com/optersoft/make/blob/main/docs/from-just.md">docs/from-just.md</a>.</p>
+</section>
+
+<section id="changelog">
+  <h2>Changelog</h2>
+  <p class="lead">Releases are tagged in the repository and published to PyPI from CI through
+  Trusted Publishing. <code>make-rust</code> — the generic cargo-hygiene group in
+  <code>rust/</code> — ships from the same repository on its own schedule.</p>
+
+  <div class="release">
+    <h3>Unreleased <span class="date">on <code>main</code></span></h3>
+    <ul>
+      <li><code>sh(heartbeat=…)</code> — a long silent command says it is still alive.</li>
+      <li><code>fs.copytree()</code>, the dry-run-aware directory copy.</li>
+      <li>A repository with no <code>Makefile.py</code> is offered one, instead of being shown a demo.</li>
+      <li><code>--doctor</code> checks that the task names in the file's docstring are real tasks.</li>
+    </ul>
+  </div>
+
+  <div class="release">
+    <h3>0.4.0 <span class="date">2026-09-03</span> <span class="tag">latest</span></h3>
+    <ul>
+      <li>A group can answer to a short name — <code>dx.start</code> reaches
+      <code>dioxus.start</code>. The alias is an input spelling only: help, <code>--list</code>,
+      <code>needs=</code> and errors keep the real name.</li>
+      <li>The fleet-specific task package moved out of this repository, and the generic
+      <code>make-rust</code> moved in — so the runner can be public without shipping anyone's
+      private tasks.</li>
+      <li><code>rust.gc</code>, which collects the superseded <code>name-&lt;hash&gt;</code>
+      artifacts cargo appends and never deletes — churn a time-based sweep cannot see.</li>
+      <li><code>rust.config</code> installs a machine-wide debuginfo policy in
+      <code>~/.cargo/config.toml</code>, in a managed block.</li>
+    </ul>
+  </div>
+
+  <div class="release">
+    <h3>0.3.0 <span class="date">2026-08-17</span></h3>
+    <ul>
+      <li>The three loops every task file hand-rolled in bash are primitives:
+      <code>poll()</code>, <code>http</code> and <code>proc</code> — each honouring
+      <code>--dry-run</code>.</li>
+      <li>The documented examples became real task files, not sketches.</li>
+    </ul>
+  </div>
+
+  <div class="release">
+    <h3>0.2.0 <span class="date">2026-08-14</span></h3>
+    <ul>
+      <li>The command is <code>mk</code>; nothing installs a <code>make</code> script.</li>
+      <li>The unit is a <em>task</em>, not a recipe — in the API, the help and the docs.</li>
+      <li>A task package belongs to the project it wraps, and a consumer names the source per
+      package in <code>[tool.uv.sources]</code>.</li>
+    </ul>
+  </div>
+
+  <div class="release">
+    <h3>0.1.0 <span class="date">2026-08-09</span></h3>
+    <ul>
+      <li>First release: tasks from a signature, groups, <code>needs</code>/<code>requires</code>,
+      <code>sh</code>, <code>fs</code>, <code>config</code>, <code>env</code> and the testing
+      recorder.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="start">
+  <h2>Get started</h2>
+  <div class="term">
+<pre><span class="p">$</span> uv tool install mkrun          <span class="c"># installs one command: mk</span>
+<span class="p">$</span> cd your-repo
+<span class="p">$</span> mk                             <span class="c"># offers to create a Makefile.py</span>
+<span class="p">$</span> mk --list                      <span class="c"># every task, with its help</span>
+<span class="p">$</span> mk --doctor                    <span class="c"># where each task package resolved from</span></pre>
+  </div>
+  <p>The full authoring API — <code>@task</code>, <code>sh</code>, <code>fs</code>,
+  <code>config</code>, <code>env</code>, <code>testing</code> — is in the
+  <a href="https://github.com/optersoft/make#readme">README</a>. The step-by-step tutorial is on
+  <a href="https://academy.optersoft.com/project/make">academy</a>.</p>
+</section>
+
+</main>
+
+<footer class="wrap">
+  <p>mkrun is built and used by <a href="https://optersoft.com">Optersoft</a>.
+  MIT OR Apache-2.0, at your choice.
+  <a href="https://github.com/optersoft/make">Source</a> ·
+  <a href="https://pypi.org/project/mkrun/">PyPI</a> ·
+  <a href="https://academy.optersoft.com/project/make">Tutorial</a></p>
+</footer>
+
+</body>
+</html>
