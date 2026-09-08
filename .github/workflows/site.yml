@@ -1,10 +1,13 @@
 # The landing page in site/ -> the Cloudflare Pages project `mkrun`
-# (https://mkrun-dcd.pages.dev), by direct upload.
+# (https://make.optersoft.com), by direct upload.
 #
-# There is no build step: site/ is what gets served, so `mk site.serve` shows
-# exactly what a deploy publishes. The check job only guards what
-# a static page can still get wrong -- a link that 404s, a stray third-party
-# origin -- and the deploy job runs on a push to main that touched site/.
+# site/ is an Astro site on `@optersoft/astro`, the chrome every Optersoft site
+# shares, consumed as a `file:../../astro` path dependency on a sibling
+# checkout -- so the job checks the two repos out side by side, this one under
+# `make/` and the chrome under `astro/`, builds site/ and deploys site/dist.
+# The check job guards what a static page can still get wrong -- a link that
+# 404s, a stray third-party origin -- and the deploy job runs on a push to
+# main that touched site/.
 #
 # `deploy` needs two repository secrets: CLOUDFLARE_API_TOKEN (an API token
 # with "Cloudflare Pages - Edit" on the optersoft account) and
@@ -23,22 +26,39 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: make/site
     steps:
       - uses: actions/checkout@v4
-      # The page claims that reading it makes no third-party request: one
-      # stylesheet, one inline SVG icon, no fonts, no scripts. Only link
-      # targets may appear as foreign origins.
+        with:
+          path: make
+      - uses: actions/checkout@v4
+        with:
+          repository: optersoft/astro
+          path: astro
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: make/site/.node-version
+          cache: npm
+          cache-dependency-path: make/site/package-lock.json
+      - run: npm ci
+      - run: npx astro check
+      - run: npx astro build
+      # The page claims that reading it makes no third-party request: the
+      # stylesheet, the fonts and the scripts all come from this origin. Only
+      # link targets may appear as foreign origins.
       - name: no foreign origins beyond link targets
         run: |
           set -euo pipefail
-          allowed='optersoft\.com|pypi\.org|github\.com|www\.sitemaps\.org|www\.w3\.org|mkrun-dcd\.pages\.dev'
-          found=$(grep -rhoE 'https?://[a-z0-9.-]+' site --include='*.html' --include='*.css' \
+          allowed='optersoft\.com|pypi\.org|github\.com|gitlab\.com|linkedin\.com|www\.sitemaps\.org|www\.w3\.org'
+          found=$(grep -rhoE 'https?://[a-z0-9.-]+' dist --include='*.html' --include='*.css' \
             | sort -u | grep -vE "$allowed" || true)
           if [ -n "$found" ]; then echo "unexpected origins:"; echo "$found"; exit 1; fi
       - name: every outbound link answers
         run: |
           set -euo pipefail
-          urls=$(grep -rhoE 'https://[^"]+' site/index.html | sort -u)
+          urls=$(grep -rhoE 'https://[^"]+' dist/index.html | sort -u)
           fail=0
           for url in $urls; do
             code=$(curl -sSL -o /dev/null -w '%{http_code}' --max-time 20 "$url" || echo 000)
@@ -46,6 +66,11 @@ jobs:
             case "$code" in 2*|3*) ;; *) fail=1 ;; esac
           done
           exit $fail
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: make/site/dist
+          retention-days: 1
 
   deploy:
     needs: check
@@ -53,7 +78,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: site
-      url: https://mkrun-dcd.pages.dev
+      url: https://make.optersoft.com
     steps:
       - name: token present?
         id: token
@@ -66,8 +91,11 @@ jobs:
           else
             echo "present=true" >> "$GITHUB_OUTPUT"
           fi
-      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         if: steps.token.outputs.present == 'true'
+        with:
+          name: site
+          path: dist
       # `--branch main` is what makes this the PRODUCTION deployment; without
       # it wrangler infers the branch and anything else lands as a preview.
       - uses: cloudflare/wrangler-action@v3
@@ -75,4 +103,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy site --project-name mkrun --branch main --commit-hash ${{ github.sha }}
+          command: pages deploy dist --project-name mkrun --branch main --commit-hash ${{ github.sha }}

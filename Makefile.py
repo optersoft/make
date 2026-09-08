@@ -3,8 +3,9 @@
     mk dev.check      lint + both test suites: everything CI runs
     mk dev.bench      startup latency against the 150ms budget
     mk dist.release   tag a version, which publishes to PyPI from CI
-    mk site.serve     the landing page in site/, locally
-    mk site.deploy    publish site/ to Cloudflare Pages (production)
+    mk site.dev       the landing page in site/ (Astro, on the Optersoft chrome), locally
+    mk site.build     site/dist
+    mk site.deploy    publish site/dist to Cloudflare Pages (production)
 
 Run `mk` with no arguments to see them all.
 """
@@ -136,53 +137,56 @@ def completions(shell: str = "zsh") -> None:
     print(emit(shell))
 
 
-# The landing page in site/ -- static files, no build step, published to the
-# Cloudflare Pages project `mkrun` by direct upload. There is no framework and
-# nothing to compile on purpose: the page is a description, the case for using
-# the tool and four links, and a toolchain for that is a second thing to keep
-# alive.
+# The landing page in site/ -- an Astro static site on the Optersoft chrome
+# (`@optersoft/astro`, the sibling checkout at ../astro), published to the
+# Cloudflare Pages project `mkrun` (make.optersoft.com) by direct upload.
 SITE = "mkrun"
-SITE_LIVE = "https://mkrun-dcd.pages.dev"
+SITE_LIVE = "https://make.optersoft.com"
+SITE_DIR = Path(__file__).resolve().parent / "site"
 
 
-@task(group="site")
-def serve(*, port: int = 8100) -> None:
-    """Serve site/ locally, exactly as Pages will (no build step)."""
-    from make import ctx
-
-    step(f"http://localhost:{port} -- ctrl-c to stop")
-    sh("python3", "-m", "http.server", str(port), "--directory", str(ctx.root / "site"))
+def _site_deps() -> None:
+    if not (SITE_DIR / "node_modules").is_dir():
+        step("installing node modules")
+        sh("npm", "ci", cwd=SITE_DIR)
 
 
-@task(group="site", requires=["wrangler"])
-def dev(*, port: int = 8101) -> None:
-    """Serve site/ through the Pages runtime, so `_headers` and 404.html apply.
-
-    `site.serve` is a plain file server -- fine for editing prose, but it does
-    not apply the CSP in `_headers` and answers 200 for a missing path. This
-    runs what the edge runs, with live reload.
-    """
-    from make import ctx
-
-    step(f"http://localhost:{port} -- the Pages runtime, ctrl-c to stop")
-    sh("wrangler", "pages", "dev", str(ctx.root / "site"), "--port", str(port), "--live-reload")
+@task(group="site", name="dev", requires=["npm"])
+def site_dev(*args: str) -> None:
+    """The Astro dev server for site/ on :4321, hot reload (extra arguments forward to astro)."""
+    _site_deps()
+    sh("npx", "astro", "dev", *args, cwd=SITE_DIR)
 
 
-@task(group="site", requires=["wrangler"], dangerous=True)
-def deploy() -> None:
-    """Publish site/ to Cloudflare Pages as the production deployment.
+@task(group="site", name="check", requires=["npm"])
+def site_check() -> None:
+    """`astro check` over site/."""
+    _site_deps()
+    sh("npx", "astro", "check", cwd=SITE_DIR)
+
+
+@task(group="site", name="build", requires=["npm"])
+def site_build() -> None:
+    """Build site/ into site/dist."""
+    _site_deps()
+    sh("npx", "astro", "build", cwd=SITE_DIR)
+
+
+@task(group="site", name="deploy", needs=[site_build], requires=["wrangler"], dangerous=True)
+def site_deploy() -> None:
+    """Build, then publish site/dist to Cloudflare Pages as the production deployment.
 
     Auth is wrangler's: `CLOUDFLARE_API_TOKEN`, else a cached `wrangler login`.
     `--branch main` is what makes this PRODUCTION -- without it wrangler infers
     the branch from git and anything but main lands as a preview that never
     reaches the live URL.
     """
-    step(f"deploying site/ to Cloudflare Pages ({SITE})")
+    step(f"deploying site/dist to Cloudflare Pages ({SITE})")
     sh(
         "wrangler",
         "pages",
         "deploy",
-        "site",
+        str(SITE_DIR / "dist"),
         "--project-name",
         SITE,
         "--branch",
@@ -201,7 +205,7 @@ def smoke(*, base: str = SITE_LIVE) -> None:
     # so the page looks broken from a check that does not send a browser one.
     browser = {"User-Agent": "Mozilla/5.0 (mk site.smoke)"}
 
-    for path, expected in ((f"{base}/", 200), (f"{base}/style.css", 200), (f"{base}/nowhere", 404)):
+    for path, expected in ((f"{base}/", 200), (f"{base}/nowhere", 404)):
         got = http.get(path, headers=browser).status
         if got != expected:
             raise SystemExit(f"{path}: expected {expected}, got {got}")
