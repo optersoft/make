@@ -1,10 +1,18 @@
-/* The root stylesheet: Tailwind, then the Optersoft chrome. The integration
-   injects this into every page. */
-@import "tailwindcss";
-@import "@optersoft/astro/styles/chrome.css";
+/* The root stylesheet: Tailwind, then the Optersoft chrome — the brand fonts and palette,
+   the `.dark` and `.gray` variants, the base `html`/`body` rules. `frontage site --tailwind`
+   compiles it into one stylesheet and links it in every page.
 
-/* The two kinds of block on this page: a terminal (dark, always) and a code
-   listing (paper). `.p` is the prompt, `.c` a comment, `.k` a keyword. */
+   ⚠ `chrome.css` is a Tailwind SOURCE, not a stylesheet a page can link: it opens with
+   `@custom-variant` and `@source`. It is imported here, after Tailwind, so the compiler sees
+   it — which is also what scans the chrome's own Python for the class names it writes. */
+@import "tailwindcss";
+@import "../../brand/optersoft_brand/static/styles/chrome.css";
+
+/* This site's class names are written in its Python. */
+@source "./";
+
+/* The two kinds of block on this page: a terminal (dark, always) and a code listing
+   (paper). `.p` is the prompt, `.c` a comment, `.k` a keyword. */
 .term {
   background-color: var(--color-slate-900);
   color: var(--color-slate-100);

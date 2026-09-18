@@ -1,19 +1,22 @@
-# Reading this site makes no third-party request: one stylesheet, the fonts
-# and two scripts, all from this origin. The CSP says so, so that a future
-# edit that adds one fails loudly instead of quietly shipping.
+# Reading this site makes no third-party request: one stylesheet, the fonts and two
+# scripts, all from this origin. The CSP says so, so that a future edit which adds one
+# fails loudly instead of quietly shipping.
 #
-# The one inline script is the chrome's pre-paint theme script
-# (`@optersoft/astro`, THEME_APPLY_SCRIPT), allowed by its hash — it has to be
-# inline, or the page flashes the wrong colour scheme. Recompute the hash when
-# that script changes:
-#   perl -0ne 'print $1 if /<script>(\(function.*?\)\(\);)<\/script>/s' dist/index.html | openssl dgst -sha256 -binary | base64
+# The two inline scripts are the chrome's (`optersoft_brand.theme`): APPLY, in the head,
+# which sets the theme before first paint — nothing that has to be fetched can do that —
+# and CONTROLS, at the end of the body, which is the toggle's clicks. They are allowed by
+# hash, so a change in the chrome breaks the page loudly rather than silently disabling
+# the theme. Recompute both after a chrome change with `mk site.csp`.
 /*
-  Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self'; font-src 'self'; script-src 'self' 'sha256-yJaicz1qy7qVh0qTL53mGbCrLL/zJIY5XRDzyv4uc/A='; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self'; font-src 'self'; script-src 'self' 'sha256-NcqAVDTuAL/VXnzAYttksm5maqZ1pBm6kAwQ2gjAdyQ=' 'sha256-SrlSMloC2Fyw1n298HfJvtlQb3JvLNeg9DzexokkNBs='; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
   Referrer-Policy: strict-origin-when-cross-origin
   X-Content-Type-Options: nosniff
   Strict-Transport-Security: max-age=31536000; includeSubDomains
 
-/_astro/*
+# The fonts are the only bytes here with a stable identity: a year is safe because a new
+# face would arrive under a new name. The stylesheet is NOT hashed, so it keeps the
+# default — a deploy has to be able to change it.
+/brand/fonts/*
   Cache-Control: public, max-age=31536000, immutable
 
 /favicon.svg

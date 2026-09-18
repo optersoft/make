@@ -1,13 +1,15 @@
 # The landing page in site/ -> the Cloudflare Pages project `mkrun`
 # (https://make.optersoft.com), by direct upload.
 #
-# site/ is an Astro site on `@optersoft/astro`, the chrome every Optersoft site
-# shares, consumed as a `file:../../astro` path dependency on a sibling
-# checkout -- so the job checks the two repos out side by side, this one under
-# `make/` and the chrome under `astro/`, builds site/ and deploys site/dist.
+# site/ is a **frontage** static site on `optersoft_brand`, the chrome every
+# Optersoft site shares, consumed as a path dependency on a sibling checkout --
+# so the job checks the two repos out side by side, this one under `make/` and
+# the chrome under `brand/`, builds site/ and deploys site/dist. There is no
+# Node here: frontage builds the pages and downloads Tailwind's standalone CLI,
+# and the deploy is `make-cloudflare`, this repository's own workspace member.
 # The check job guards what a static page can still get wrong -- a link that
-# 404s, a stray third-party origin -- and the deploy job runs on a push to
-# main that touched site/.
+# 404s, a stray third-party origin, a CSP hash that stopped matching the
+# chrome's inline scripts.
 #
 # `deploy` needs two repository secrets: CLOUDFLARE_API_TOKEN (an API token
 # with "Cloudflare Pages - Edit" on the optersoft account) and
@@ -18,9 +20,9 @@ name: Site
 on:
   push:
     branches: [main]
-    paths: ["site/**", ".github/workflows/site.yml"]
+    paths: ["site/**", "cloudflare/**", ".github/workflows/site.yml"]
   pull_request:
-    paths: ["site/**", ".github/workflows/site.yml"]
+    paths: ["site/**", "cloudflare/**", ".github/workflows/site.yml"]
   workflow_dispatch:
 
 jobs:
@@ -35,23 +37,26 @@ jobs:
           path: make
       - uses: actions/checkout@v4
         with:
-          repository: optersoft/astro
-          path: astro
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: make/site/.node-version
-          cache: npm
-          cache-dependency-path: make/site/package-lock.json
-      - run: npm ci
-      - run: npx astro check
-      - run: npx astro build
+          repository: optersoft/brand
+          path: brand
+      - uses: astral-sh/setup-uv@v5
+      # The site's own suite builds it and reads the output: no JavaScript is
+      # fetched, the canonical and robots meta are what they claim, the 404 is
+      # noindex, and the CSP hashes still match the chrome's inline scripts.
+      - run: uv sync
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest -q
+      - run: uv run python -m frontage site . --out dist --tailwind
       # The page claims that reading it makes no third-party request: the
       # stylesheet, the fonts and the scripts all come from this origin. Only
-      # link targets may appear as foreign origins.
+      # link targets may appear as foreign origins -- plus tailwindcss.com,
+      # which is the licence banner Tailwind's own CLI writes into the first
+      # line of the compiled stylesheet.
       - name: no foreign origins beyond link targets
         run: |
           set -euo pipefail
-          allowed='optersoft\.com|pypi\.org|github\.com|gitlab\.com|linkedin\.com|www\.sitemaps\.org|www\.w3\.org'
+          allowed='optersoft\.com|pypi\.org|github\.com|gitlab\.com|linkedin\.com|youtube\.com|tailwindcss\.com|www\.sitemaps\.org|www\.w3\.org'
           found=$(grep -rhoE 'https?://[a-z0-9.-]+' dist --include='*.html' --include='*.css' \
             | sort -u | grep -vE "$allowed" || true)
           if [ -n "$found" ]; then echo "unexpected origins:"; echo "$found"; exit 1; fi
@@ -79,28 +84,36 @@ jobs:
     environment:
       name: site
       url: https://make.optersoft.com
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - name: token present?
         id: token
-        env:
-          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          if [ -z "$TOKEN" ]; then
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
             echo "::warning::CLOUDFLARE_API_TOKEN is not set - skipping the deploy (see the header of this file)"
             echo "present=false" >> "$GITHUB_OUTPUT"
           else
             echo "present=true" >> "$GITHUB_OUTPUT"
           fi
+      - uses: actions/checkout@v4
+        if: steps.token.outputs.present == 'true'
+      - uses: astral-sh/setup-uv@v5
+        if: steps.token.outputs.present == 'true'
       - uses: actions/download-artifact@v4
         if: steps.token.outputs.present == 'true'
         with:
           name: site
           path: dist
-      # `--branch main` is what makes this the PRODUCTION deployment; without
-      # it wrangler infers the branch and anything else lands as a preview.
-      - uses: cloudflare/wrangler-action@v3
+      # The publishing is this repository's own `make-cloudflare`: the four
+      # direct-upload calls, no wrangler and no Node. `branch="main"` is what
+      # makes this the PRODUCTION deployment; any other name is a preview.
+      - name: publish
         if: steps.token.outputs.present == 'true'
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name mkrun --branch main --commit-hash ${{ github.sha }}
+        run: |
+          uv sync --all-extras --all-packages
+          uv run python -c "
+          from make_cloudflare import pages
+          print(pages.deploy('dist', project='mkrun', branch='main'))
+          "

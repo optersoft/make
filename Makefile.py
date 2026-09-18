@@ -3,9 +3,9 @@
     mk dev.check      lint + both test suites: everything CI runs
     mk dev.bench      startup latency against the 150ms budget
     mk dist.release   tag a version, which publishes to PyPI from CI
-    mk site.dev       the landing page in site/ (Astro, on the Optersoft chrome), locally
+    mk site.dev       the landing page in site/ (frontage, on the Optersoft chrome), locally
     mk site.build     site/dist
-    mk site.deploy    publish site/dist to Cloudflare Pages (production)
+    mk site.deploy    publish site/dist to Cloudflare Pages (production), via make-cloudflare
 
 Run `mk` with no arguments to see them all.
 """
@@ -137,63 +137,119 @@ def completions(shell: str = "zsh") -> None:
     print(emit(shell))
 
 
-# The landing page in site/ -- an Astro static site on the Optersoft chrome
-# (`@optersoft/astro`, the sibling checkout at ../astro), published to the
+# The landing page in site/ -- a **frontage** static site on the Optersoft
+# chrome (`optersoft_brand`, the sibling checkout at ../brand), published to the
 # Cloudflare Pages project `mkrun` (make.optersoft.com) by direct upload.
+#
+# Astro until 2026-09-14, when it was rebuilt on frontage and the deploy moved
+# from wrangler to `make-cloudflare` -- this repo's own workspace member, which
+# is the point: the site of a Python task runner had a node_modules and shelled
+# out to a JavaScript CLI to publish itself. There is no Node here any more.
 SITE = "mkrun"
 SITE_LIVE = "https://make.optersoft.com"
 SITE_DIR = Path(__file__).resolve().parent / "site"
 
+#: The chrome is a path dependency on the sibling checkout -- the fleet's convention,
+#: so an edit there ships with the next deploy and there is nothing to bump. A host
+#: that clones ONE repository has no sibling and cannot resolve it, so `build` fetches
+#: it when it is absent. Public on GitHub for exactly this reason: no credentials.
+BRAND = "https://github.com/optersoft/brand.git"
 
-def _site_deps() -> None:
-    if not (SITE_DIR / "node_modules").is_dir():
-        step("installing node modules")
-        sh("npm", "ci", cwd=SITE_DIR)
+
+def _chrome() -> None:
+    """Make `../brand` exist, so the path dependency resolves.
+
+    A no-op on any machine with the fleet checked out side by side, which is every
+    laptop and the CI job. Shallow, because the build reads the working tree and
+    never the history.
+    """
+    beside = SITE_DIR.parent.parent / "brand"
+    if beside.exists():
+        return
+    step(f"the chrome is not beside us -- cloning it into {beside}")
+    sh("git", "clone", "--depth", "1", BRAND, str(beside))
 
 
-@task(group="site", name="dev", requires=["npm"])
+@task(group="site", name="dev", requires=["uv"])
 def site_dev(*args: str) -> None:
-    """The Astro dev server for site/ on :4321, hot reload (extra arguments forward to astro)."""
-    _site_deps()
-    sh("npx", "astro", "dev", *args, cwd=SITE_DIR)
+    """The site under `frontage serve`, with live reload (extra arguments forward to it).
+
+    `--prerender` is what makes `serve` build the site the way `site.build` does rather
+    than hand out files: a site has no file at a path until the build makes one. It
+    detects a site by the presence of `pages/`, so there is nothing else to pass. It was
+    `--site` until frontage 0.14 replaced the flag, which this repo's lock already
+    resolves -- the old spelling made `serve` exit on its usage message.
+    """
+    _chrome()
+    sh("uv", "run", "python", "-m", "frontage", "serve", ".", "--prerender", *args, cwd=SITE_DIR)
 
 
-@task(group="site", name="check", requires=["npm"])
+@task(group="site", name="check", requires=["uv"])
 def site_check() -> None:
-    """`astro check` over site/."""
-    _site_deps()
-    sh("npx", "astro", "check", cwd=SITE_DIR)
+    """ruff, then the site's own tests -- which build it and read the output.
+
+    They are cheap and load-bearing: the page fetches no JavaScript, the canonical
+    and the robots meta are what they claim, the 404 is noindex, every outbound
+    link the page promises is still in it, and -- the one nothing else notices --
+    the CSP hashes in `public/_headers` still match the chrome's two inline
+    scripts. A stale hash breaks neither the build nor the deploy; the browser
+    just silently refuses to run the theme.
+    """
+    _chrome()
+    sh("uv", "run", "ruff", "check", ".", cwd=SITE_DIR)
+    sh("uv", "run", "ruff", "format", "--check", ".", cwd=SITE_DIR)
+    sh("uv", "run", "pytest", "-q", cwd=SITE_DIR)
 
 
-@task(group="site", name="build", requires=["npm"])
+@task(group="site", name="build", requires=["uv", "git"])
 def site_build() -> None:
-    """Build site/ into site/dist."""
-    _site_deps()
-    sh("npx", "astro", "build", cwd=SITE_DIR)
+    """Build site/ into site/dist -- two pages, no runtime, no node_modules."""
+    _chrome()
+    sh("uv", "run", "python", "-m", "frontage", "site", ".", "--out", "dist", "--tailwind", cwd=SITE_DIR)
 
 
-@task(group="site", name="deploy", needs=[site_build], requires=["wrangler"], dangerous=True)
-def site_deploy() -> None:
+@task(group="site", name="csp", needs=[site_build])
+def site_csp() -> None:
+    """Rewrite the CSP script hashes in site/public/_headers from the built page.
+
+    The chrome's theme scripts are inline -- they have to be, or the page flashes
+    the wrong colour scheme before it paints -- so the policy allows them by hash.
+    Run this after a change in `../brand`, then rebuild.
+    """
+    import base64
+    import hashlib
+    import re
+
+    from make import fs
+
+    page = (SITE_DIR / "dist" / "index.html").read_text()
+    scripts = re.findall(r"<script>(.*?)</script>", page, re.S)
+    hashes = " ".join(
+        f"'sha256-{base64.b64encode(hashlib.sha256(s.encode()).digest()).decode()}'" for s in scripts
+    )
+    headers = SITE_DIR / "public" / "_headers"
+    text = headers.read_text()
+    updated = re.sub(r"script-src 'self'[^;]*;", f"script-src 'self' {hashes};", text, count=1)
+    if updated == text:
+        note(f"{len(scripts)} inline script(s); the policy already matches")
+        return
+    fs.write(headers, updated)
+    warn("the hashes changed -- rebuild before deploying, or the theme will be refused")
+
+
+@task(group="site", name="deploy", needs=[site_build], dangerous=True, secrets=["CLOUDFLARE_API_TOKEN"])
+def site_deploy(*, branch: str = "main") -> None:
     """Build, then publish site/dist to Cloudflare Pages as the production deployment.
 
-    Auth is wrangler's: `CLOUDFLARE_API_TOKEN`, else a cached `wrangler login`.
-    `--branch main` is what makes this PRODUCTION -- without it wrangler infers
-    the branch from git and anything but main lands as a preview that never
-    reaches the live URL.
+    Dogfood: the publishing is `make-cloudflare`, this repository's own workspace
+    member -- four HTTPS calls, no wrangler and no Node. `--branch main` is what
+    makes it PRODUCTION; any other name lands as a preview on its own URL and
+    never reaches the live one.
     """
-    step(f"deploying site/dist to Cloudflare Pages ({SITE})")
-    sh(
-        "wrangler",
-        "pages",
-        "deploy",
-        str(SITE_DIR / "dist"),
-        "--project-name",
-        SITE,
-        "--branch",
-        "main",
-        "--commit-dirty=true",
-    )
-    note(f"done -- {SITE_LIVE}")
+    from make_cloudflare import pages
+
+    url = pages.deploy(SITE_DIR / "dist", project=SITE, branch=branch)
+    note(f"done -- {url}" + ("" if branch == "main" else f" (preview; live is {SITE_LIVE})"))
 
 
 @task(group="site")

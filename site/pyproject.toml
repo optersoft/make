@@ -1,0 +1,44 @@
+[project]
+name = "mkrun-site"
+version = "0.1.0"
+description = "make.optersoft.com — the mkrun landing page, a frontage static site"
+requires-python = ">=3.12"
+dependencies = [
+    "frontage>=0.13.7",
+    # ⚠ The git URL is for **pip**, not for us: `[tool.uv.sources]` below overrides it with
+    # the sibling checkout, which is what every local build and the CI job resolve. It is
+    # here so that a host which runs `pip install .` of its own accord can still resolve the
+    # chrome, which is not on PyPI.
+    "optersoft-brand @ git+https://github.com/optersoft/brand.git",
+]
+
+# This is an APPLICATION, not a package: nothing to import, nothing to publish. setuptools is
+# declared only so a bare `pip install .` has a backend instead of falling into flat-layout
+# autodiscovery, which fails on a repo whose top level is `pages/`, `layouts/`, `public/`.
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = []
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.uv.sources]
+# The fleet's convention, applied to Python: the chrome resolves by relative path, so there
+# is nothing to bump and an uncommitted edit in it ships with the next deploy. ⚠ frontage is
+# NOT a path dependency -- this site is one proof that the released wheel builds a real one.
+optersoft-brand = { path = "../../brand", editable = true }
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

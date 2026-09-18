@@ -23,11 +23,27 @@ owns what it wraps (see the last section). `make-cloudflare` is also where a thi
 dependency is allowed to live: it needs `blake3`, and `mkrun` has none and keeps none.
 
 The fourth thing in the tree is **`site/`**, which is not a distribution: the landing page at
-https://mkrun-dcd.pages.dev, static files with no build step, published to the Cloudflare Pages
-project `mkrun` by direct upload (`mk site.deploy`, or a push to `main` touching `site/`). It
-makes the case for using the tool and links out; it is **not documentation and not a release
-feed** — deliberately no changelog, because a hand-deployed page that has to be updated on
-every commit is a page that is wrong most of the time. See `site/README.md`.
+make.optersoft.com, published to the Cloudflare Pages project `mkrun` by direct upload
+(`mk site.deploy`, or a push to `main` touching `site/`). It makes the case for using the tool
+and links out; it is **not documentation and not a release feed** — deliberately no changelog,
+because a hand-deployed page that has to be updated on every commit is a page that is wrong
+most of the time. See `site/README.md`.
+
+⚠️ **It has no Node in it, as of 2026-09-14, and that is the point.** It was an Astro site on
+`@optersoft/astro` deployed with `wrangler` — a Python task runner whose own page carried a
+`node_modules` and shelled out to a JavaScript CLI to publish itself. It is now a **frontage**
+static site on `optersoft_brand` (the sibling checkout at `../brand`, a path dependency: nothing
+to bump, uncommitted edits there ship with a deploy), and it deploys through **`make-cloudflare`**,
+this repo's own member. Two consequences worth holding onto: `site/` is a **separate uv project**,
+not a workspace member (it is an application, nothing to publish, and a member would ride into the
+`mkrun` sdist check), so its tasks run `uv run` with `cwd=site/`; and the chrome's two **inline
+theme scripts are allowed by CSP hash** in `site/public/_headers`, so a change in `../brand` needs
+`mk site.csp` — a stale hash breaks neither the build nor the deploy, the browser just silently
+refuses to run the theme, and only `site/tests/` notices.
+
+⚠️ **The hand deploy now needs `CLOUDFLARE_API_TOKEN`.** wrangler rode on a cached
+`wrangler login` OAuth session; the API cannot be handed one, so the token (Cloudflare Pages:
+Edit) is the only route. `CLOUDFLARE_ACCOUNT_ID` is already in `~/.make/secrets.env`.
 
 ⚠️ **`optersoft-make` no longer lives here.** It was the second member (`optersoft/`) until
 2026-08-17, when it moved to the private `make-optersoft` repo (on the forge,
