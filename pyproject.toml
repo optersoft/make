@@ -78,10 +78,10 @@ only-include = [
 # to the private optersoft/make-optersoft repo on 2026-08-17 so this repo can go
 # public.)
 [tool.uv.workspace]
-members = ["rust", "cloudflare"]
+members = ["rust", "cloudflare", "marketplace"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "rust/tests", "cloudflare/tests"]
+testpaths = ["tests", "rust/tests", "cloudflare/tests", "marketplace/tests"]
 addopts = "-q"
 
 [tool.ruff]
@@ -89,7 +89,7 @@ line-length = 110
 target-version = "py311"
 # Every workspace member is first-party. Without their src dirs here, ruff sorts
 # `make_rust` / `make_cloudflare` as third-party imports inside their own package.
-src = ["src", "rust/src", "cloudflare/src"]
+src = ["src", "rust/src", "cloudflare/src", "marketplace/src"]
 
 [tool.ruff.lint.isort]
 # Paired with format.skip-magic-trailing-comma below; ruff warns if they disagree.
@@ -119,3 +119,4 @@ ignore = ["E501", "B008", "RUF012", "SIM117", "RUF022"]
 "tests/**" = ["F811", "B006"]
 "rust/tests/**" = ["F811", "B006"]
 "cloudflare/tests/**" = ["F811", "B006"]
+"marketplace/tests/**" = ["F811", "B006"]

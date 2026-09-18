@@ -9,6 +9,7 @@ resolution-markers = [
 [manifest]
 members = [
     "make-cloudflare",
+    "make-marketplace",
     "make-rust",
     "mkrun",
 ]
@@ -127,6 +128,29 @@ requires-dist = [
     { name = "blake3", specifier = ">=1.0" },
     { name = "mkrun", editable = "." },
 ]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8" },
+    { name = "ruff", specifier = ">=0.6" },
+]
+
+[[package]]
+name = "make-marketplace"
+version = "0.1.0"
+source = { editable = "marketplace" }
+dependencies = [
+    { name = "mkrun" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "mkrun", editable = "." }]
 
 [package.metadata.requires-dev]
 dev = [

@@ -16,18 +16,28 @@ from pathlib import Path
 
 from make import note, sh, step, task, warn
 
-# Both workspace members, listed as Python paths rather than as directories.
+# Every workspace member, listed as Python paths rather than as directories.
 # Ruff formats Python code blocks inside markdown too, and handing it a whole
 # directory reaches docs/ -- where examples are hand-packed to read as prose
 # and reformatting them is a docs edit disguised as a lint fix.
-SOURCES = ["src", "tests", "Makefile.py", "rust/src", "rust/tests", "cloudflare/src", "cloudflare/tests"]
+SOURCES = [
+    "src",
+    "tests",
+    "Makefile.py",
+    "rust/src",
+    "rust/tests",
+    "cloudflare/src",
+    "cloudflare/tests",
+    "marketplace/src",
+    "marketplace/tests",
+]
 
 
 @task(group="dev", requires=["uv"])
 def sync() -> None:
     """Install every workspace member in editable mode.
 
-    `--all-packages` is what reaches rust/ and cloudflare/; a plain `uv sync`
+    `--all-packages` is what reaches rust/, cloudflare/ and marketplace/; a plain `uv sync`
     installs the root project only, and then their tests fail on import rather
     than on anything real.
 

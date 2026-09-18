@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 does and the whole authoring API (`@task`, `sh`, `fs`, `config`, `env`, `testing`). Don't
 re-derive any of it here. What follows is only what a reader of the source would get wrong.
 
-`optersoft/make` is **three Python distributions in one uv workspace** — all generic, all
+`optersoft/make` is **four Python distributions in one uv workspace** — all generic, all
 publishable, nothing fleet-specific anywhere in it:
 
 | Path | Distribution | What it is |
@@ -14,15 +14,17 @@ publishable, nothing fleet-specific anywhere in it:
 | `src/make/` | **`mkrun`** | the runner. Published to PyPI, MIT OR Apache-2.0 |
 | `rust/` | **`make-rust`** | generic cargo hygiene tasks (`rust.usage/clean/sweep`). Same licence |
 | `cloudflare/` | **`make-cloudflare`** | Cloudflare Pages direct upload (`cloudflare.deploy`), no Node, no wrangler. Same licence |
+| `marketplace/` | **`make-marketplace`** | VS Code Marketplace: build a `.vsix`, and cut a release CI publishes (`marketplace.release`). Same licence |
 
 They are packaged separately and resolved together: `[tool.uv.workspace] members = ["rust",
-"cloudflare"]`, with `mkrun = { workspace = true }` in each member, so a runner change is
-tested against real tasks in the same commit. A member belongs here only if it wraps a tool
-**nobody in particular owns** — cargo, a hosting API; anything else ships from the repo that
-owns what it wraps (see the last section). `make-cloudflare` is also where a third-party
-dependency is allowed to live: it needs `blake3`, and `mkrun` has none and keeps none.
+"cloudflare", "marketplace"]`, with `mkrun = { workspace = true }` in each member, so a runner
+change is tested against real tasks in the same commit. A member belongs here only if it wraps
+a tool **nobody in particular owns** — cargo, a hosting API, `vsce`; anything else ships from
+the repo that owns what it wraps (see the last section). `make-cloudflare` is also where a
+third-party dependency is allowed to live: it needs `blake3`, and `mkrun` has none and keeps
+none.
 
-The fourth thing in the tree is **`site/`**, which is not a distribution: the landing page at
+The fifth thing in the tree is **`site/`**, which is not a distribution: the landing page at
 make.optersoft.com, published to the Cloudflare Pages project `mkrun` by direct upload
 (`mk site.deploy`, or a push to `main` touching `site/`). It makes the case for using the tool
 and links out; it is **not documentation and not a release feed** — deliberately no changelog,
@@ -58,13 +60,18 @@ to `github.com/optersoft/make` was preceded by `git-filter-repo --path optersoft
 so **every SHA here changed** (35 → 31 commits). Nothing pinned them: this repo reaches consumers
 as `mkrun`/`make-rust`/`make-cloudflare` on **PyPI**, never as a git dependency.
 
+⚠️ **`make-marketplace` is the one exception to that, for now.** It is not released yet, so its
+only consumer — `optersoft/kotlin` — names it as a git source *on this repo*
+(`subdirectory = "marketplace"`), which does pin a SHA-shaped thing to this history. Release it
+and move that consumer to PyPI like the other three.
+
 ## Commands
 
 ```bash
 uv sync --all-extras --all-packages   # --all-packages, or the members are not installed
-uv run pytest                         # all three suites (testpaths covers the members')
-uv run ruff check  src tests Makefile.py rust/src rust/tests cloudflare/src cloudflare/tests
-uv run ruff format src tests Makefile.py rust/src rust/tests cloudflare/src cloudflare/tests
+uv run pytest                         # all four suites (testpaths covers the members')
+uv run ruff check  src tests Makefile.py rust/src rust/tests cloudflare/src cloudflare/tests marketplace/src marketplace/tests
+uv run ruff format src tests Makefile.py rust/src rust/tests cloudflare/src cloudflare/tests marketplace/src marketplace/tests
 uv run mk dev.check                   # all of the above, dogfooded
 uv run mk dev.bench                   # startup latency against the 150ms budget
 ```
@@ -118,8 +125,15 @@ The convention this tool exists to enable:
   importing as `<repo>_make`. First one: **`hetzner-make`** (the `box` group, beside the
   `hetzner-box` crate it drives). Then **`dioxus-make`** (the `dioxus` group).
 - Fully generic groups that wrap a tool *nobody anywhere* owns — cargo, in `rust/`; the
-  Cloudflare Pages API, in `cloudflare/` — live here, beside the runner, and publish like it.
-- optersoft's fleet groups (android, play, agent, database, secure) are in the private
+  Cloudflare Pages API, in `cloudflare/`; `vsce` and the VS Code Marketplace, in
+  `marketplace/` — live here, beside the runner, and publish like it.
+- ⚠️ **Generic is the rule, but *public* is what settles the hard cases.** `make-marketplace`
+  could have gone in the private fleet package beside `play`: it holds a release pipeline and
+  the operational knowledge behind it. It is here because both its consumers are **public
+  repos**, and a private task package in a public repo means a stranger who clones it cannot
+  run `mk test` — resolution fails before any task does. Anything fleet-specific it would have
+  carried (publisher identities, how the token is minted) stays out of it as consumer config.
+- optersoft's fleet groups (android, play, agent, database, secure, sign) are in the private
   `make-optersoft` repo on the forge (`code.optersoft.com/make-optersoft.git`).
 - A consumer names the source per package (`git` or `path`) in `[tool.uv.sources]`, and can
   redirect any of them to a local checkout with a gitignored `.make/sources.toml` without
