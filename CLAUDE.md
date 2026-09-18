@@ -53,7 +53,7 @@ Lint paths are listed explicitly rather than as directories: **ruff formats Pyth
 markdown**, and handing it a whole directory reaches hand-packed docs examples — a docs edit
 disguised as a lint fix.
 
-## The five things that are easy to break
+## The six things that are easy to break
 
 **1. The command is `mk`. There is no `make` command.** `[project.scripts]` declares `mk` only;
 a `make` script would shadow GNU make on the PATH of every Unix machine. The *import* name is
@@ -74,7 +74,19 @@ stranger's package. `reexec` raises instead.
 heavy import at module scope is the usual cause; groups are imported lazily through
 `__getattr__` for the same reason.
 
-**5. This repo must build with no sibling checkout.** No member may name a path or git source
+**5. A secret is contained by the *runner*, not by the store.** `env.layered()`
+exports configuration and withholds anything `env.sensitive()` calls a credential;
+`env.require` / `env.secret` / `@task(secrets=[...])` hand one to the asking task and
+the runner withdraws it again when that task ends (`runner._unbind_secrets`). Every
+line `make` prints goes through `context.echo`, which redacts. Encryption
+(`make.secrets`, age + a keychain) is a second, independent layer: turning it off
+must not turn the containment off, which is why the containment tests in
+`tests/test_secrets.py` do not require `age`. Two rules that look optional and are
+not: never route the identity or a keychain lookup through `sh()` (it echoes, and
+`--dry-run` would skip it), and never let a secret reach an argv — `security -i`
+reads its command from stdin for exactly that reason.
+
+**6. This repo must build with no sibling checkout.** No member may name a path or git source
 that only resolves on this machine — CI and a bare clone are exactly the environments that
 don't have it. `rust/` depends on `mkrun` alone, from the workspace.
 

@@ -28,10 +28,10 @@ import subprocess
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-from .context import current, debug
+from .context import current, debug, mark_sensitive
 from .errors import ConfigError
 
-__all__ = ["config_dir", "layered", "load", "parse", "repo_name", "require"]
+__all__ = ["config_dir", "layered", "load", "parse", "repo_name", "require", "secret", "sensitive"]
 
 _LINE = re.compile(
     r"""^\s*
@@ -44,6 +44,26 @@ _LINE = re.compile(
 )
 
 _INTERPOLATION = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)")
+
+#: A plaintext layer mixes configuration with credentials -- `ANDROID_KEY_ALIAS`
+#: and `KEYSTORE_PASSWORD` sit in the same file -- and only the second kind must
+#: be kept out of a child process's environment and out of the terminal. The
+#: name is the only signal available, so these are the endings that mean
+#: "credential", and the endings that override them because they name a
+#: *location* of one: `PLAY_ACCOUNT_JSON` is a path, `ANDROID_KEY_ALIAS` is a
+#: label. A value from the encrypted store is sensitive regardless of its name;
+#: this heuristic exists only for the plaintext layers it replaces.
+_SENSITIVE_SUFFIXES = ("PASSWORD", "PASSPHRASE", "SECRET", "TOKEN", "KEY", "CREDENTIAL", "CREDENTIALS")
+_LOCATION_SUFFIXES = ("_PATH", "_FILE", "_DIR", "_ID", "_ALIAS", "_URL", "_HOST", "_JSON", "_NAME")
+
+
+def sensitive(key: str) -> bool:
+    """True when a variable's *name* says it holds a credential."""
+    upper = key.upper()
+    if upper.endswith(_LOCATION_SUFFIXES):
+        return False
+    return upper.endswith(_SENSITIVE_SUFFIXES)
+
 
 #: Directories searched for `secrets.env` / `<repo>.env`, in order. The
 #: `~/.just` entry is deliberate migration support: if you are coming from
@@ -166,17 +186,55 @@ def layered(
     for path in paths:
         merged.update(load(path, base=merged))
 
+    # The encrypted store is deliberately NOT read here. Reading it unlocks a
+    # keychain, and `layered()` is called by tasks that want configuration --
+    # a port, a directory -- which would make a passphrase prompt appear in
+    # front of work that needs no credential at all. `require`/`secret` reach
+    # the store, on demand, for the task that actually asks.
+
+    for key, value in merged.items():
+        if sensitive(key):
+            mark_sensitive(value)
+
     if export:
         context = current()
         updated = dict(context.env)
         for key, value in merged.items():
+            if sensitive(key):
+                if override:
+                    _forced[key] = value
+                # Held back deliberately. Exporting the whole layer handed every
+                # child process every credential in it: `mk android.release` gave
+                # gradle, fastlane and their plugins the trading account's
+                # password. A task gets a secret by asking -- `env.require`,
+                # `env.secret`, or `@task(secrets=[...])` -- and then only that
+                # task's children see it.
+                _vault[key] = value
+                continue
             if not override and key in os.environ and key not in context.env:
                 continue  # an explicit export from the caller outranks a file
             updated[key] = value
         from .context import set_context
 
         set_context(context.with_(env=updated))
+    else:
+        for key, value in merged.items():
+            if sensitive(key):
+                (_forced if override else _vault)[key] = value
     return merged
+
+
+#: Sensitive values that a layer supplied but which were not exported. Held for
+#: `require`/`secret` to hand out on request, so reading a layer is not the same
+#: act as publishing it to every subprocess.
+_vault: dict[str, str] = {}
+
+#: Sensitive values a layer was read with `override=True`, which is an
+#: instruction that the file outranks even an exported variable. Without this
+#: they would land in `_vault`, which `secret` consults *after* the environment
+#: -- and `override=` would silently do nothing for exactly the variables it is
+#: usually reached for.
+_forced: dict[str, str] = {}
 
 
 def export(force: bool = False, **values: object) -> None:
@@ -204,21 +262,75 @@ def export(force: bool = False, **values: object) -> None:
 
 
 def get(key: str, default: str | None = None) -> str | None:
-    """Look a variable up in the run context first, then the real environment."""
+    """Look a variable up in the run context first, then the real environment.
+
+    A credential a layer supplied this run is visible here even though it was
+    not exported -- `get` is a lookup, not a hand-off, and a task that reads one
+    and passes it on deliberately (`sh(..., env={...})`) is doing the right
+    thing. What `get` will not do is reach the encrypted store: a keychain
+    prompt should never happen behind a non-committal lookup. Ask for a
+    credential with `secret` or `require`.
+    """
     context = current()
     if key in context.env:
         return context.env[key]
-    return os.environ.get(key, default)
+    if key in os.environ:
+        return os.environ[key]
+    if key in _forced or key in _vault:
+        return _forced.get(key) or _vault[key]
+    return default
+
+
+def secret(key: str, *, export_to_children: bool = True) -> str | None:
+    """A credential, from wherever it lives. None when there is none.
+
+    Order: the caller's environment, then this run's context, then a layer
+    already read, then the encrypted store. The value is masked in everything
+    `make` prints from here on, and -- unless you say otherwise -- exported for
+    this task's child processes, because a task that asks for a secret is
+    normally about to hand it to a tool.
+    """
+    found = _forced.get(key) or os.environ.get(key) or current().env.get(key) or _vault.get(key)
+    if found is None:
+        from . import secrets as secret_store
+
+        if secret_store.available():
+            found = secret_store.layered().get(key)
+    if found is None:
+        return None
+    mark_sensitive(found)
+    if export_to_children:
+        from .context import set_context
+
+        context = current()
+        if context.env.get(key) != found:
+            set_context(context.with_(env={**context.env, key: found}))
+    return found
 
 
 def require(key: str, *, hint: str | None = None) -> str:
-    """Fetch a variable or fail with a message naming where to put it."""
-    value = get(key)
+    """Fetch a variable or fail with a message naming where to put it.
+
+    Reaches the encrypted store for anything whose name says it is a
+    credential, so a task written before the store existed keeps working after
+    its value moves into one.
+    """
+    value = secret(key) if sensitive(key) else get(key)
     if value:
         return value
-    raise ConfigError(
-        f"{key} is not set",
-        hint=hint
-        or f"add {key}=... to {config_dir()}/secrets.env (global) or "
-        f"{config_dir()}/{repo_name()}.env (this project), then re-run",
+    from . import secrets as secret_store
+
+    where = (
+        f"`mk secure.set {key} <value>` puts it in the encrypted store"
+        if sensitive(key)
+        else f"add {key}=... to {config_dir()}/secrets.env (global) or "
+        f"{config_dir()}/{repo_name()}.env (this project)"
     )
+    del secret_store
+    raise ConfigError(f"{key} is not set", hint=hint or where + ", then re-run")
+
+
+def reset_cache() -> None:
+    """Forget held-back sensitive values. For tests."""
+    _vault.clear()
+    _forced.clear()

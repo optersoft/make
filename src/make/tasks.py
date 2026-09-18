@@ -91,6 +91,7 @@ class Task:
     params: list[Param] = field(default_factory=list)
     needs: tuple[Any, ...] = ()
     requires: tuple[str, ...] = ()
+    secrets: tuple[str, ...] = ()
     dangerous: bool = False
     abstract: bool = False
     hidden: bool = False
@@ -368,6 +369,7 @@ def _make_task(
     group: str | None,
     needs: Sequence[Any],
     requires: Sequence[str],
+    secrets: Sequence[str],
     dangerous: bool,
     abstract: bool,
     hidden: bool,
@@ -389,6 +391,7 @@ def _make_task(
         params=params,
         needs=tuple(needs),
         requires=tuple(requires),
+        secrets=tuple(secrets),
         dangerous=dangerous,
         abstract=abstract,
         hidden=hidden or (name or fn.__name__).startswith("_"),
@@ -411,6 +414,7 @@ def task(
     group: str | None = None,
     needs: Sequence[Any] = (),
     requires: Sequence[str] = (),
+    secrets: Sequence[str] = (),
     dangerous: bool = False,
     abstract: bool = False,
     hidden: bool = False,
@@ -428,6 +432,9 @@ def task(
         group: namespace, so the task is `<group>.<name>`.
         needs: tasks to run first, once per invocation.
         requires: tools that must be on PATH; checked before anything runs.
+        secrets: names resolved from the secret store (or the environment)
+            before the body runs, and exported to its child processes -- and
+            to nothing else. A missing one fails before anything runs.
         dangerous: demand `--yes` or an interactive confirmation.
         abstract: declared but unimplemented; a consumer must override it.
         hidden: keep out of `--list` (also implied by a leading underscore).
@@ -444,6 +451,7 @@ def task(
             group=group,
             needs=needs,
             requires=requires,
+            secrets=secrets,
             dangerous=dangerous,
             abstract=abstract,
             hidden=hidden,

@@ -19,8 +19,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .context import confirm, current, debug, note
-from .errors import Aborted, TaskError
+from .context import Context, confirm, current, debug, note
+from .errors import Aborted, ConfigError, TaskError
 from .sh import sh
 from .tasks import Task, normalize
 from .tasks import registry as default_registry
@@ -62,6 +62,57 @@ def _check_dangerous(item: Task) -> None:
         )
 
 
+def _bind_secrets(item: Task) -> None:
+    """Resolve `secrets=[...]` into this task's environment, before the work.
+
+    Deliberately alongside `requires=`, before `needs=` runs: the failure this
+    prevents is a twenty-minute emulated build that ends at a missing
+    credential, which is exactly when discovering it is most expensive.
+    """
+    if not item.secrets:
+        return
+    from . import env as env_module
+
+    missing = []
+    for name in item.secrets:
+        if env_module.secret(name) is None:
+            missing.append(name)
+    if missing:
+        names = ", ".join(missing)
+        raise ConfigError(
+            f"{item.full_name}: no value for {names}",
+            hint=f"`mk secure.set {missing[0]} <value>` stores it encrypted, or export it for one run",
+        )
+
+
+def _unbind_secrets(previous: Context) -> None:
+    """Drop the secrets this task resolved, so a sibling task does not inherit them.
+
+    Configuration that a task exported stays: a prerequisite that sets up the
+    environment for the tasks after it is an ordinary and useful thing. Only
+    values registered as sensitive are withdrawn -- which is the whole
+    difference between reading a layer and publishing it.
+    """
+    from . import env as env_module
+    from .context import _sensitive, set_context
+
+    context = current()
+    if context is previous or not context.env:
+        return
+
+    def withdraw(key: str, value: str) -> bool:
+        if previous.env.get(key) == value:
+            return False  # it was already there; this task did not bring it
+        # Either test alone leaves a hole: a value can be too short to be worth
+        # masking (`redact` ignores those) while still being a credential, and a
+        # credential from the store can have a name that says nothing.
+        return value in _sensitive or env_module.sensitive(key)
+
+    kept = {k: v for k, v in context.env.items() if not withdraw(k, v)}
+    if kept != context.env:
+        set_context(context.with_(env=kept))
+
+
 def _check_abstract(item: Task) -> None:
     if not item.abstract:
         return
@@ -88,8 +139,12 @@ def run_one(item: Task, args: Sequence[Any] = (), kwargs: dict[str, Any] | None 
         if key in context._memo:
             return context._memo[key]
 
+    # Before the gates, not after: `_bind_secrets` is itself one of the things
+    # whose effect on the environment has to be undone when the task is done.
+    entered = context
     _check_abstract(item)
     _check_tools(item)
+    _bind_secrets(item)
 
     _run_needs(item)
     _check_dangerous(item)
@@ -107,6 +162,7 @@ def run_one(item: Task, args: Sequence[Any] = (), kwargs: dict[str, Any] | None 
     finally:
         if Path.cwd() != previous_cwd:
             os.chdir(previous_cwd)
+        _unbind_secrets(entered)
 
     elapsed = time.monotonic() - started
     if elapsed > 5 and not context.quiet:

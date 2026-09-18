@@ -339,7 +339,7 @@ $ MAKE_WEB_PORT=8105 mk web.start
 A missing required value fails with the field, its type, and all three places it
 could be set.
 
-### Layered secrets
+### Layered environment
 
 ```python
 from make import env
@@ -351,6 +351,63 @@ Later layers win, but a variable exported by the caller still beats all of them.
 checkout's name even from inside a linked worktree — otherwise a worktree finds no
 file and starts with no application environment at all, silently, because a
 missing layer is not an error.
+
+### Secrets
+
+A layer mixes configuration with credentials, and only one of the two should
+reach a child process. `env.layered()` exports the configuration; anything whose
+name reads as a credential is held back until a task asks for it:
+
+```python
+@task(secrets=["KEYSTORE_PASSWORD"])          # resolved before the body runs
+def release() -> None:
+    sh("./gradlew", "assembleRelease")        # sees it
+
+@task
+def lint() -> None:
+    sh("./gradlew", "lint")                   # does not
+```
+
+`env.require("KEYSTORE_PASSWORD")` is the same thing asked for in the body, and
+returns the value. Either way it goes into that task's environment and no other
+one's, so a build tool and its plugins stop receiving every credential the
+machine has on the way to signing an APK.
+
+A value obtained this way is **masked in everything the runner prints** — the
+echoed command, `--dry-run`, `--verbose`, the tail of a failed command's
+output, the error message. Your own `print()` is untouched: printing a secret on
+purpose is a thing tasks do.
+
+Values can stay in the plaintext layers. They can also be encrypted, which is
+where they belong on a laptop:
+
+```console
+$ mk secure.init          # an age identity, held in a keychain that locks
+$ mk secure.set API_TOKEN # prompts; never an argv, never a shell history
+$ mk secure.list          # names, never values
+```
+
+```
+~/.make/secrets/recipient.txt     the age public key. Not a secret.
+~/.make/secrets/global.age        every project, like secrets.env
+~/.make/secrets/<repo>.age        one project, like <repo>.env
+~/.make/secrets/files/<name>.age  a keystore, a service-account JSON
+```
+
+Decrypted, a layer is exactly the `KEY=value` text above, so nothing about the
+format is new and `age -d -i <key> global.age` is the whole escape hatch. The
+recipient is public, so **writing a secret costs nothing**; only reading unlocks
+the keychain, once per session. `secrets.file("upload.jks")` hands a task a
+private temporary path for the tools that insist on a real file, and removes it
+on exit.
+
+Off macOS — CI, a server — `MAKE_AGE_IDENTITY` names the key or a file holding
+it. `mk --doctor` prints which layers exist, the names in them, and where the
+identity would come from.
+
+The `secure.*` tasks are [optersoft-make](https://code.optersoft.com/make-optersoft.git);
+the store itself is `make.secrets`, and any task package can offer its own front
+end to it.
 
 ## Sharing tasks
 

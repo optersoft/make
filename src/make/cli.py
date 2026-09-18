@@ -414,6 +414,8 @@ def _doctor(task_file: Path | None = None, metadata: object = None) -> int:
         marker = paint("ok  ", "green") if path else paint("MISS", "yellow")
         echo(f"  {marker}{tool:<18} {paint(path or 'not on PATH', 'dim')}")
 
+    _secret_store()
+
     echo()
     abstract = [i.full_name for i in registry.all(include_hidden=True) if i.abstract]
     if abstract:
@@ -422,6 +424,36 @@ def _doctor(task_file: Path | None = None, metadata: object = None) -> int:
     if stale:
         warn("the task file's docstring names tasks that do not exist: " + ", ".join(stale))
     return 1 if missing else 0
+
+
+def _secret_store() -> None:
+    """The encrypted layers, the names in them, and where the identity comes from.
+
+    Names, never values. The question this answers is the one that is otherwise
+    unanswerable without decrypting by hand: which layer a credential is in, and
+    whether this machine can read it at all.
+    """
+    from . import secrets as store
+
+    layers = store.layer_files()
+    if not layers:
+        return
+    echo()
+    echo(paint("secret store", "bold"))
+    for path in layers:
+        try:
+            names = ", ".join(sorted(store.load(path))) or "(empty)"
+            echo(f"  {paint('ok  ', 'green')}{path.name:<18} {paint(names, 'dim')}")
+        except MakeError as exc:
+            echo(f"  {paint('MISS', 'red')}{path.name:<18} {paint(exc.message, 'dim')}")
+            return
+    files = sorted((store.store_dir() / "files").glob("*.age"))
+    if files:
+        echo(f"  {paint('ok  ', 'green')}{'files':<18} {paint(', '.join(f.stem for f in files), 'dim')}")
+    where = store.keychain() or "the login keychain"
+    if os.environ.get("MAKE_AGE_IDENTITY"):
+        where = "MAKE_AGE_IDENTITY"
+    echo(f"  {paint('    ', 'dim')}{'identity':<18} {paint(where, 'dim')}")
 
 
 def docstring_task_names(doc: str) -> list[str]:

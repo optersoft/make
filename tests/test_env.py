@@ -52,7 +52,7 @@ def test_an_explicit_export_outranks_every_file(project: Path, monkeypatch):
         from make.context import current
 
         assert current().env.get("TOKEN") != "from-file"
-        assert env.get("TOKEN") == "from-caller"
+        assert env.secret("TOKEN") == "from-caller"
     assert active is not None
 
 
@@ -61,7 +61,7 @@ def test_override_true_lets_files_win(project: Path, monkeypatch):
     monkeypatch.setenv("TOKEN", "from-caller")
     with context(root=project):
         env.layered(files=[a], override=True)
-        assert env.get("TOKEN") == "from-file"
+        assert env.secret("TOKEN") == "from-file"
 
 
 def test_export_does_not_mutate_os_environ(project: Path):

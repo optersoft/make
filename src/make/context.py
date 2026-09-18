@@ -151,8 +151,50 @@ def paint(text: str, *styles: str) -> str:
     return f"{codes}{text}{_ANSI['reset']}"
 
 
+# --------------------------------------------------------------------------
+# Redaction
+# --------------------------------------------------------------------------
+
+#: Values that must never reach the terminal through `make`'s own output.
+#: Process-wide rather than per-context: a secret is a secret in every task.
+_sensitive: set[str] = set()
+
+#: Below this length a value is too short to be worth redacting, and too
+#: likely to be a substring of something innocent ("1", "true", a port).
+_MIN_SENSITIVE = 4
+
+
+def mark_sensitive(*values: str) -> None:
+    """Register values to be masked in every `echo` from now on.
+
+    Called for you by the secret store and for env-file keys that look like
+    credentials (`env.SENSITIVE`). Call it yourself for a value that arrived
+    some other way -- a token parsed out of a tool's output, say.
+    """
+    for value in values:
+        if value and len(value) >= _MIN_SENSITIVE:
+            _sensitive.add(value)
+
+
+def redact(text: str) -> str:
+    """`text` with every registered secret replaced by `***`."""
+    if not _sensitive:
+        return text
+    for value in sorted(_sensitive, key=len, reverse=True):
+        if value in text:
+            text = text.replace(value, "***")
+    return text
+
+
 def echo(message: str = "", *, err: bool = True) -> None:
-    print(message, file=sys.stderr if err else sys.stdout, flush=True)
+    """Print one line, redacted. Every terminal line `make` writes goes through here.
+
+    A task's own `print()` does not: printing a password with `mk secure.get`
+    is the point of that task. Redaction is for the runner's channel -- echoed
+    commands, `--dry-run`, `--verbose`, error messages -- where a secret is
+    never the intended output.
+    """
+    print(redact(message), file=sys.stderr if err else sys.stdout, flush=True)
 
 
 def info(message: str) -> None:

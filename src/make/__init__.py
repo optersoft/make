@@ -50,6 +50,7 @@ __all__ = [
     "env",
     "fs",
     "config",
+    "secrets",
     "arg",
     "poll",
     "http",
@@ -79,6 +80,21 @@ __all__ = [
     "Aborted",
     "WaitTimeout",
 ]
+
+
+def __getattr__(name: str):
+    """`make.secrets` is imported on first use, not at startup.
+
+    Everything it needs -- `age`, the keychain -- costs a subprocess, and a
+    task file that never touches a credential should not pay for the import.
+    Startup latency is a feature here, and this is the module most likely to
+    grow.
+    """
+    if name == "secrets":
+        import importlib
+
+        return importlib.import_module(".secrets", __name__)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def main(argv: list[str] | None = None) -> int:

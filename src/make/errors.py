@@ -49,12 +49,16 @@ class CommandFailed(MakeError):
         self.output = output
         import shlex
 
+        from .context import redact
+
         message = f"command failed (exit {returncode}): {shlex.join(argv)}"
         if output:
             tail = output.strip().splitlines()[-10:]
             if tail:
                 message += "\n" + "\n".join("  " + line for line in tail)
-        super().__init__(message)
+        # Redacted at construction: the message is also what `str(exc)` returns,
+        # and a task may log or re-raise it without going through `echo`.
+        super().__init__(redact(message))
         self.exit_code = returncode or 1
 
 

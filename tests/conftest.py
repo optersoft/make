@@ -20,9 +20,20 @@ def hermetic_config_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     Tests that need config layers monkeypatch CONFIG_DIRS themselves, on top.
     """
     from make import env as env_module
+    from make import secrets as secrets_module
 
     monkeypatch.setattr(env_module, "CONFIG_DIRS", (tmp_path / "make-home", tmp_path / "just-home"))
+    # And no test reaches the developer's real keychain or age identity: an
+    # unexpected passphrase prompt in the middle of a test run is the failure
+    # mode, and it does not look like a test failure.
+    monkeypatch.setenv("MAKE_SECRETS_DIR", str(tmp_path / "make-home" / "secrets"))
+    monkeypatch.setenv("MAKE_KEYCHAIN", "")
+    monkeypatch.delenv("MAKE_AGE_IDENTITY", raising=False)
+    secrets_module.reset_cache()
+    env_module.reset_cache()
     yield
+    secrets_module.reset_cache()
+    env_module.reset_cache()
 
 
 @pytest.fixture(autouse=True)
