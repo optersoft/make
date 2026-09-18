@@ -16,14 +16,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      # --all-packages reaches the rust/ workspace member. pytest collects its
+      # --all-packages reaches the rust/ and cloudflare/ workspace members. pytest collects their
       # suite too, so without it the verify step below fails on import rather
       # than on anything about the release.
       - run: uv sync --all-extras --all-packages
       - name: Verify before shipping
         run: |
-          uv run ruff check src tests Makefile.py rust/src rust/tests
-          uv run ruff format --check src tests Makefile.py rust/src rust/tests
+          uv run ruff check src tests Makefile.py rust/src rust/tests cloudflare/src cloudflare/tests
+          uv run ruff format --check src tests Makefile.py rust/src rust/tests cloudflare/src cloudflare/tests
           uv run pytest
       - name: Check the tag matches the version
         run: |
@@ -34,14 +34,16 @@ jobs:
             exit 1
           fi
         if: startsWith(github.ref, 'refs/tags/v')
-      # Named explicitly: this repository is a workspace with a second member
-      # (`rust/`, which publishes as make-rust on its own), and dist/ is uploaded
+      # Named explicitly: this repository is a workspace with two other members
+      # (`rust/` and `cloudflare/`, which publish on their own), and dist/ is uploaded
       # to PyPI wholesale below. A bare `uv build` builds the root today, but
       # nothing in that sentence is a guarantee worth resting the upload on.
       - run: uv build --package mkrun
       # The sdist must stay the tool alone: it defaulted to the whole project
       # directory once and swept in a sibling member's sources, so this check is
-      # the thing standing between a release and publishing them.
+      # the thing standing between a release and publishing them. Every new
+      # member is one `only-include` slip away from riding along -- the grep
+      # below is what notices, and it needs no edit to cover the next one.
       - name: The sdist contains only the tool
         run: |
           unexpected="$(tar tzf dist/*.tar.gz | sed 's|^[^/]*/||' \

@@ -540,16 +540,18 @@ an error, since nothing should write into a repository unasked.
 
 ## Repository layout
 
-`src/make/` is this tool, published as `mkrun`. `rust/` is a second, separate
-distribution — `make-rust`, generic cargo hygiene tasks — kept here as a uv
-workspace member so a change to the runner is tested against real tasks in the
-same commit. It is excluded from the `mkrun` sdist and wheel; installing this tool
-never installs it. `site/` is the landing page.
+`src/make/` is this tool, published as `mkrun`. `rust/` and `cloudflare/` are two
+further, separate distributions — `make-rust`, generic cargo hygiene tasks, and
+`make-cloudflare`, Cloudflare Pages direct upload with no Node and no wrangler —
+kept here as uv workspace members so a change to the runner is tested against real
+tasks in the same commit. Both are excluded from the `mkrun` sdist and wheel;
+installing this tool never installs them, and `mkrun` itself has no dependencies.
+`site/` is the landing page.
 
-`rust/` is generic on purpose, because that is the convention the tool encourages:
+They are generic on purpose, because that is the convention the tool encourages:
 a project ships its tasks in its own `make/` directory, as `<project>-make`, and
-consumers name the source. Only groups that wrap something *nobody* owns — cargo —
-belong beside the runner.
+consumers name the source. Only groups that wrap something *nobody* owns — cargo,
+a hosting API — belong beside the runner.
 
 ## Status
 

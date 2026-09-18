@@ -1,0 +1,43 @@
+[project]
+name = "make-cloudflare"
+version = "0.1.0"
+description = "Cloudflare Pages direct upload for mkrun -- deploy a built site with no Node and no wrangler."
+readme = "README.md"
+requires-python = ">=3.11"
+# Same dual licence as mkrun, for the same reason: this member is generic and
+# publishable. The licence texts live at the repository root; a built wheel
+# carries the SPDX expression, which is what PEP 639 asks for.
+license = "MIT OR Apache-2.0"
+authors = [{ name = "Optersoft, S.L.", email = "david@optersoft.com" }]
+keywords = ["cloudflare", "pages", "deploy", "direct upload", "mk", "mkrun"]
+# blake3 is not optional and not replaceable: Cloudflare's asset store is keyed
+# on it, so a deploy that hashes with anything else uploads files nothing will
+# ever ask for. It lives here rather than in the runner precisely so `mkrun`
+# itself stays dependency-free -- see this repo's CLAUDE.md, rule 4.
+dependencies = ["mkrun>=0.4", "blake3>=1.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/make_cloudflare"]
+
+[project.urls]
+Source = "https://github.com/optersoft/make/tree/main/cloudflare"
+
+# The runner is the other half of this repository, so resolve it from the
+# working tree instead of PyPI, exactly as rust/ does: a change to `make.http`
+# is testable against a real consumer in the same commit that makes it.
+[tool.uv.sources]
+mkrun = { workspace = true }
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+# No [tool.ruff] here on purpose: every member shares the root config, so they
+# cannot drift apart by an isort option.

@@ -68,25 +68,28 @@ only-include = [
     "pyproject.toml",
 ]
 
-# Two distributions, one checkout: `mkrun` here at the root, and the generic
-# cargo-hygiene package in rust/. They are packaged separately -- see the sdist
-# rule above -- but resolved and locked together, so a runner change and real
-# tasks that exercise it land in one commit and one lockfile. (optersoft's own
-# make package was the original second member; it moved to the private
-# optersoft/make-optersoft repo on 2026-08-17 so this repo can go public.)
+# Three distributions, one checkout: `mkrun` here at the root, and the two
+# generic task packages -- cargo hygiene in rust/, Cloudflare Pages in
+# cloudflare/. They are packaged separately -- see the sdist rule above -- but
+# resolved and locked together, so a runner change and real tasks that exercise
+# it land in one commit and one lockfile. A member is here only if it wraps a
+# tool nobody in particular owns; anything else belongs beside the thing it
+# drives. (optersoft's own make package was the original second member; it moved
+# to the private optersoft/make-optersoft repo on 2026-08-17 so this repo can go
+# public.)
 [tool.uv.workspace]
-members = ["rust"]
+members = ["rust", "cloudflare"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "rust/tests"]
+testpaths = ["tests", "rust/tests", "cloudflare/tests"]
 addopts = "-q"
 
 [tool.ruff]
 line-length = 110
 target-version = "py311"
-# Both workspace members are first-party. Without rust/src here, ruff sorts
-# `make_rust` as a third-party import inside its own package.
-src = ["src", "rust/src"]
+# Every workspace member is first-party. Without their src dirs here, ruff sorts
+# `make_rust` / `make_cloudflare` as third-party imports inside their own package.
+src = ["src", "rust/src", "cloudflare/src"]
 
 [tool.ruff.lint.isort]
 # Paired with format.skip-magic-trailing-comma below; ruff warns if they disagree.
@@ -115,3 +118,4 @@ ignore = ["E501", "B008", "RUF012", "SIM117", "RUF022"]
 # file, so `tests/**` alone would not reach the rust package.
 "tests/**" = ["F811", "B006"]
 "rust/tests/**" = ["F811", "B006"]
+"cloudflare/tests/**" = ["F811", "B006"]

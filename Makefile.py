@@ -20,16 +20,16 @@ from make import note, sh, step, task, warn
 # Ruff formats Python code blocks inside markdown too, and handing it a whole
 # directory reaches docs/ -- where examples are hand-packed to read as prose
 # and reformatting them is a docs edit disguised as a lint fix.
-SOURCES = ["src", "tests", "Makefile.py", "rust/src", "rust/tests"]
+SOURCES = ["src", "tests", "Makefile.py", "rust/src", "rust/tests", "cloudflare/src", "cloudflare/tests"]
 
 
 @task(group="dev", requires=["uv"])
 def sync() -> None:
-    """Install both workspace members in editable mode.
+    """Install every workspace member in editable mode.
 
-    `--all-packages` is what reaches rust/; a plain `uv sync` installs the
-    root project only, and then rust/tests fail on import rather than on
-    anything real.
+    `--all-packages` is what reaches rust/ and cloudflare/; a plain `uv sync`
+    installs the root project only, and then their tests fail on import rather
+    than on anything real.
 
     Also removes a stray `make` distribution. The import name is `make` but the
     distribution is `mkrun`, so an environment carrying both -- easy to end up

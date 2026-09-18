@@ -6,19 +6,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 does and the whole authoring API (`@task`, `sh`, `fs`, `config`, `env`, `testing`). Don't
 re-derive any of it here. What follows is only what a reader of the source would get wrong.
 
-`optersoft/make` is **two Python distributions in one uv workspace** — both generic, both
+`optersoft/make` is **three Python distributions in one uv workspace** — all generic, all
 publishable, nothing fleet-specific anywhere in it:
 
 | Path | Distribution | What it is |
 |---|---|---|
 | `src/make/` | **`mkrun`** | the runner. Published to PyPI, MIT OR Apache-2.0 |
 | `rust/` | **`make-rust`** | generic cargo hygiene tasks (`rust.usage/clean/sweep`). Same licence |
+| `cloudflare/` | **`make-cloudflare`** | Cloudflare Pages direct upload (`cloudflare.deploy`), no Node, no wrangler. Same licence |
 
-They are packaged separately and resolved together: `[tool.uv.workspace] members = ["rust"]`,
-with `mkrun = { workspace = true }` in the member, so a runner change is tested against real
-tasks in the same commit.
+They are packaged separately and resolved together: `[tool.uv.workspace] members = ["rust",
+"cloudflare"]`, with `mkrun = { workspace = true }` in each member, so a runner change is
+tested against real tasks in the same commit. A member belongs here only if it wraps a tool
+**nobody in particular owns** — cargo, a hosting API; anything else ships from the repo that
+owns what it wraps (see the last section). `make-cloudflare` is also where a third-party
+dependency is allowed to live: it needs `blake3`, and `mkrun` has none and keeps none.
 
-The third thing in the tree is **`site/`**, which is not a distribution: the landing page at
+The fourth thing in the tree is **`site/`**, which is not a distribution: the landing page at
 https://mkrun-dcd.pages.dev, static files with no build step, published to the Cloudflare Pages
 project `mkrun` by direct upload (`mk site.deploy`, or a push to `main` touching `site/`). It
 makes the case for using the tool and links out; it is **not documentation and not a release
@@ -36,15 +40,15 @@ all 11 commits that touched `optersoft/` intact, which meant a public clone coul
 the fleet's private tasks at any older tag — `v0.2.0` and `v0.3.0` both contained them. Publishing
 to `github.com/optersoft/make` was preceded by `git-filter-repo --path optersoft --invert-paths`,
 so **every SHA here changed** (35 → 31 commits). Nothing pinned them: this repo reaches consumers
-as `mkrun`/`make-rust` on **PyPI**, never as a git dependency.
+as `mkrun`/`make-rust`/`make-cloudflare` on **PyPI**, never as a git dependency.
 
 ## Commands
 
 ```bash
-uv sync --all-extras --all-packages   # --all-packages, or rust/ is not installed
-uv run pytest                         # both suites (testpaths covers rust/tests)
-uv run ruff check  src tests Makefile.py rust/src rust/tests
-uv run ruff format src tests Makefile.py rust/src rust/tests
+uv sync --all-extras --all-packages   # --all-packages, or the members are not installed
+uv run pytest                         # all three suites (testpaths covers the members')
+uv run ruff check  src tests Makefile.py rust/src rust/tests cloudflare/src cloudflare/tests
+uv run ruff format src tests Makefile.py rust/src rust/tests cloudflare/src cloudflare/tests
 uv run mk dev.check                   # all of the above, dogfooded
 uv run mk dev.bench                   # startup latency against the 150ms budget
 ```
@@ -97,8 +101,8 @@ The convention this tool exists to enable:
 - A repo that owns a tool ships its tasks in **`<repo>/make/`**, as **`<repo>-make`**,
   importing as `<repo>_make`. First one: **`hetzner-make`** (the `box` group, beside the
   `hetzner-box` crate it drives). Then **`dioxus-make`** (the `dioxus` group).
-- Fully generic groups that wrap a tool *nobody anywhere* owns — cargo, in `rust/` — live here,
-  beside the runner, and publish like it.
+- Fully generic groups that wrap a tool *nobody anywhere* owns — cargo, in `rust/`; the
+  Cloudflare Pages API, in `cloudflare/` — live here, beside the runner, and publish like it.
 - optersoft's fleet groups (android, play, agent, database, secure) are in the private
   `make-optersoft` repo on the forge (`code.optersoft.com/make-optersoft.git`).
 - A consumer names the source per package (`git` or `path`) in `[tool.uv.sources]`, and can

@@ -19,15 +19,15 @@ jobs:
         with:
           enable-cache: true
       - run: uv python install ${{ matrix.python }}
-      # --all-packages reaches the rust/ workspace member; pytest collects its
+      # --all-packages reaches the rust/ and cloudflare/ workspace members; pytest collects their
       # suite too, so without it the run fails on an import rather than on
       # anything real. Nothing here needs a sibling checkout, precisely so this
       # works on a bare clone.
       - run: uv sync --all-extras --all-packages --python ${{ matrix.python }}
       - name: Lint
         run: |
-          uv run ruff check src tests Makefile.py rust/src rust/tests
-          uv run ruff format --check src tests Makefile.py rust/src rust/tests
+          uv run ruff check src tests Makefile.py rust/src rust/tests cloudflare/src cloudflare/tests
+          uv run ruff format --check src tests Makefile.py rust/src rust/tests cloudflare/src cloudflare/tests
       # tests/test_sources.py builds real wheels and runs real `uv sync`s to
       # prove a task package resolves from a path and from git. The git half
       # uses a local bare repo over file://, so the only thing it fetches is a
